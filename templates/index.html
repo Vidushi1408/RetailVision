@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Retail Analytics</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>AI-Powered Retail Analytics</h1>
+        <p>Upload a video to analyze customer movement.</p>
+        
+        <form id="upload-form" enctype="multipart/form-data">
+            <input type="file" id="video-file" accept="video/*" required>
+            <button type="submit">Analyze Video</button>
+        </form>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        document.getElementById("upload-form").onsubmit = async function(event) {
+            event.preventDefault();
+            let fileInput = document.getElementById("video-file").files[0];
+
+            if (!fileInput) {
+                alert("Please select a video file.");
+                return;
+            }
+
+            let formData = new FormData();
+            formData.append("file", fileInput);
+
+            let response = await fetch("/analyze_video/", {
+                method: "POST",
+                body: formData
+            });
+
+            let result = await response.json();
+            document.getElementById("result").innerHTML = 
+                `<p>People Count: <strong>${result.people_count}</strong></p>
+                 <p>Timestamp: <strong>${result.timestamp}</strong></p>`;
+        };
+    </script>
+</body>
+</html>
