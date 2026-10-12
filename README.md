@@ -15,7 +15,7 @@ First use downloads YOLOv8n, CLIP and Qwen weights (a few GB) once; afterwards i
 ## Run
 ```bash
 .venv/bin/uvicorn main:app --reload     # dashboard at http://127.0.0.1:8000
-.venv/bin/python -m unittest test_retailvision -v
+.venv/bin/python -m unittest test_retailvision test_api test_counting -v
 ```
 The SQLite database (`store_analytics.db`) is created automatically and is not tracked in git.
 Put sample videos in the project root; `*.mp4` and `*.avi` are git-ignored.
@@ -44,12 +44,14 @@ Then build `data/mall_counts.npy` from `mall_dataset/mall_gt.mat` (`count` array
 |---|---|---|
 | `PRELOAD_MODELS` | `yolo,llm` | Models loaded at server start in a background thread. `none` disables (tests/CI). |
 | `ENABLE_CLIP_ATTRIBUTES` | `0` | `1` enables CLIP staff/customer + carrying labels. Off because they were not accurate on 640x480 CCTV. |
+| `COUNT_LINES` | one horizontal mid-frame line | JSON `{"name": [x1,y1,x2,y2]}` in 0-1 frame coordinates; in/out crossings are counted per line. |
 | `MAX_UPLOAD_MB` | `500` | Upload size limit (HTTP 413 above it). |
 | `LOCAL_LLM` | `Qwen/Qwen2.5-1.5B-Instruct` | Local model used by `/ask/`. |
 
 ## API notes
 - `POST /analyze_video/?background=true` returns `{"job_id"}` at once; poll `GET /jobs/{job_id}`
   (`queued` / `running` / `done` / `error`). Without `background` it blocks and returns the summary.
+- `GET /crossings/?video_id=` returns in/out totals per counting line.
 - Accepted video types: mp4, avi, mov, mkv, webm.
 
 ## Accuracy checks (need `data/`, see above)

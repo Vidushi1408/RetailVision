@@ -5,7 +5,10 @@ from collections import defaultdict
 
 import cv2
 import numpy as np
+import yaml
+from types import SimpleNamespace
 from ultralytics import YOLO
+from ultralytics.trackers.byte_tracker import BYTETracker
 
 from .device import get_device
 
@@ -91,6 +94,36 @@ def merge_fragments(tracks, max_gap=4.0, max_dist=0.12, feats=None,
     return merged, parent
 
 
+def line_crossings(points, line, margin=0.02):
+    """Directed crossings of one segment by one track.
+
+    line = (ax, ay, bx, by) in normalised frame coordinates. "in" means moving from the left-hand
+    side of A->B to the right-hand side (in image coordinates, y down); "out" is the reverse.
+    A crossing is counted only when the track moves from beyond `margin` on one side to beyond
+    `margin` on the other, so jitter around the line is not counted, and only when the crossing
+    point lies within the segment (walking around its end does not count).
+    Returns [(sec, "in"|"out"), ...].
+    """
+    ax, ay, bx, by = line
+    ex, ey = bx - ax, by - ay
+    length = math.hypot(ex, ey)
+    events, state = [], None
+    for sec, x, y in points:
+        dist = (ex * (y - ay) - ey * (x - ax)) / length  # signed distance, + = right-hand side
+        if dist > margin:
+            new = "pos"
+        elif dist < -margin:
+            new = "neg"
+        else:
+            continue
+        if state is not None and new != state:
+            u = ((x - ax) * ex + (y - ay) * ey) / (length ** 2)
+            if -0.05 <= u <= 1.05:
+                events.append((sec, "in" if new == "pos" else "out"))
+        state = new
+    return events
+
+
 _models = {}
 
 
@@ -102,7 +135,7 @@ def get_model(model_path="yolov8s.pt"):
 
 
 def track_video(path, model_path="yolov8s.pt", stride=None, imgsz=1280, conf=0.15,
-                use_appearance=False):
+                use_appearance=False, lines=None):
     """Returns (meta, tracks, crops).
 
     `stride` = process every Nth frame; default None picks ~5 processed frames per
@@ -114,16 +147,19 @@ def track_video(path, model_path="yolov8s.pt", stride=None, imgsz=1280, conf=0.1
     """
     dev = get_device()
     model = get_model(model_path)
-    if getattr(model, "predictor", None) is not None:  # cached model: forget the previous video
-        for t in getattr(model.predictor, "trackers", []):
-            t.reset()
     cap = cv2.VideoCapture(path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     if stride is None:
         stride = max(1, round(fps / 5))
+    # Detect and associate separately: model.track() only returns *confirmed* tracks, which at
+    # low fps hides most people (Phase 1: 13.7 vs 23.9 detections per frame on the Mall clip).
+    # A fresh BYTETracker per video also means no state leaks between videos.
+    with open(TRACKER_CFG) as f:
+        byte = BYTETracker(args=SimpleNamespace(**yaml.safe_load(f)))
     tracks = defaultdict(lambda: {"points": [], "zones": defaultdict(int)})
     crops, crop_area = {}, defaultdict(int)
     frame_idx, frames_seen, per_second = 0, 0, defaultdict(set)
+    occupancy = defaultdict(list)  # second -> detections per processed frame (incl. id-less)
     w = h = 1
 
     while True:
@@ -136,13 +172,14 @@ def track_video(path, model_path="yolov8s.pt", stride=None, imgsz=1280, conf=0.1
         frames_seen += 1
         h, w = frame.shape[:2]
         sec = frame_idx / fps
-        res = model.track(frame, persist=True, classes=[PERSON],
-                          tracker=TRACKER_CFG, imgsz=imgsz, conf=conf,
-                          device=dev, verbose=False)[0]
-
-        if res.boxes.id is None:
+        det = model.predict(frame, classes=[PERSON], imgsz=imgsz, conf=conf,
+                            device=dev, verbose=False)[0].boxes.cpu().numpy()
+        occupancy[int(sec)].append(len(det))
+        out = byte.update(det, frame)
+        if len(out) == 0:
             continue
-        for box, tid in zip(res.boxes.xyxy.tolist(), res.boxes.id.int().tolist()):
+        for row in out:
+            box, tid = row[:4], int(row[4])
             x1, y1, x2, y2 = map(int, box)
             cx, cy = (x1 + x2) / 2 / w, (y1 + y2) / 2 / h  # normalised
             t = tracks[tid]
@@ -155,6 +192,9 @@ def track_video(path, model_path="yolov8s.pt", stride=None, imgsz=1280, conf=0.1
                 crops[tid] = frame[max(y1, 0):y2, max(x1, 0):x2].copy()
     cap.release()
     raw_ids = len(tracks)
+    # Count crossings on RAW tracks: merged tracks may chain different people.
+    crossings = {name: sorted(e for t in tracks.values() for e in line_crossings(t["points"], ln))
+                 for name, ln in (lines or {}).items()}
     feats = None
     if use_appearance:
         feats = {i: f for i, c in crops.items() if (f := appearance_feature(c)) is not None}
@@ -166,7 +206,8 @@ def track_video(path, model_path="yolov8s.pt", stride=None, imgsz=1280, conf=0.1
             best_crops[r] = c
     crops = best_crops
     meta = {"fps": fps, "duration_sec": frame_idx / fps,
-            "stride": stride, "raw_ids": raw_ids, "parent": parent,
+            "stride": stride, "raw_ids": raw_ids, "parent": parent, "crossings": crossings,
+            "occupancy_per_second": {sec: float(np.mean(v)) for sec, v in occupancy.items()},
             "per_second_counts": {s: len(ids) for s, ids in per_second.items()}}
     return meta, tracks, crops
 

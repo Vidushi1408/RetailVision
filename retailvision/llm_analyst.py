@@ -18,6 +18,7 @@ customer_traffic(timestamp TEXT, people_count INTEGER)
 videos(id, filename, fps, duration_sec, created)
 tracks(video_id, track_id, first_sec, last_sec, dwell_sec, path_length, avg_speed,
        stationary_ratio, zone TEXT, role TEXT, carrying TEXT, segment TEXT)
+crossings(video_id, line_name, direction[in|out], sec)  -- one row per person crossing a counting line
 role is customer|employee; carrying is basket|bag|nothing;
 segment is passer-by|browser|engaged-shopper; zone is r{row}c{col} on a 3x3 grid."""
 

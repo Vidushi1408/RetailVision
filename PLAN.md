@@ -201,3 +201,33 @@ treat as a rough check.
   and cannot be pinned down without identity ground truth (e.g. MOT17/MOT20 annotations or a
   hand-tracked 30 s window). Prefer robust metrics for reporting: average occupancy (people
   present), peak occupancy, and line-crossing counts at an entrance.
+
+## 11. Identity-free metrics: occupancy and line crossings (done)
+
+Because unique visitors cannot be verified (section 10), the reportable metrics are now:
+
+| Metric | How | Where |
+|---|---|---|
+| Occupancy (people visible) | raw detections per processed frame, averaged per second | `customer_traffic.people_count`, summary `occupancy.mean/peak` |
+| Line crossings in/out | per-track sign change across a configurable segment, with a 0.02 margin against jitter, counted on **raw** tracks | `crossings` table, `GET /crossings/`, summary `crossings` |
+
+Lines are set with `COUNT_LINES='{"door":[0.0,0.5,1.0,0.5]}'` (normalised x1,y1,x2,y2); "in" =
+moving from the left-hand side of A->B to the right-hand side (image coords, y down).
+
+Bug found and fixed on the way: `model.track()` returns only *confirmed* tracks, so at ~2 fps it
+reported 13.7 people per frame where plain detection finds 23.9 (truth ~25.4). The tracker now
+runs detection and ByteTrack association separately (one inference), and a fresh tracker is
+created per video.
+
+| Mall clip (200 s) | Before | After |
+|---|---|---|
+| Occupancy MAE (people, per second) | 12.2 (bias -12.2, 47%) | **3.8** (bias -3.0, 14%) |
+| Mean occupancy (truth 25.9) | 13.7 | 22.8 |
+| Peak occupancy (truth 49) | 26 | 42 |
+| Raw / merged tracks | 352 / 296 | 352 / 296 (unchanged) |
+
+- Crossing counts have no ground truth in this dataset; correctness is covered by 8 synthetic
+  tests (direction, jitter, zig-zag, walking around a short line). On the mall clip a mid-frame
+  horizontal line gave 111 in / 66 out; treat as unverified until counted by hand on a clip.
+- Text-to-SQL re-check after adding the `crossings` table to the schema prompt: 28/30 lenient.
+- Known limit: a person whose track ID breaks exactly at the line is missed (undercount).

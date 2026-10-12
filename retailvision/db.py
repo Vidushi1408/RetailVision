@@ -30,6 +30,11 @@ def init_db():
             path_length REAL, avg_speed REAL, stationary_ratio REAL,
             zone TEXT, role TEXT, carrying TEXT, segment TEXT
         );
+        CREATE TABLE IF NOT EXISTS crossings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            video_id INTEGER, line_name TEXT, direction TEXT, sec REAL
+        );
+        CREATE INDEX IF NOT EXISTS idx_crossings_video ON crossings(video_id);
         CREATE INDEX IF NOT EXISTS idx_traffic_timestamp ON customer_traffic(timestamp);
         CREATE INDEX IF NOT EXISTS idx_tracks_video_id ON tracks(video_id);
         CREATE INDEX IF NOT EXISTS idx_tracks_segment ON tracks(segment);

@@ -131,6 +131,22 @@ def get_overview():
     }
 
 
+@app.get("/crossings/")
+def crossings(video_id: int | None = None):
+    """Directed line-crossing totals per counting line (optionally for one video)."""
+    conn = connect()
+    q = "SELECT video_id, line_name, direction, COUNT(*) n FROM crossings"
+    args = ()
+    if video_id is not None:
+        q, args = q + " WHERE video_id = ?", (video_id,)
+    rows = conn.execute(q + " GROUP BY video_id, line_name, direction ORDER BY video_id", args).fetchall()
+    conn.close()
+    out = {}
+    for r in rows:
+        out.setdefault(r["video_id"], {}).setdefault(r["line_name"], {"in": 0, "out": 0})[r["direction"]] = r["n"]
+    return out
+
+
 @app.get("/ask/")
 def ask(q: str):
     from retailvision.llm_analyst import ask as ask_llm
