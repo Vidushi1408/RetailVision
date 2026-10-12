@@ -3,45 +3,354 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Retail Analytics</title>
+    <meta name="description" content="RetailVision AI — Autonomous computer vision store analytics, footfall forecasting, behavioral segmentation, and conversational retail intelligence.">
+    <title>RetailVision — AI Store Intelligence & Predictive Analytics</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>AI-Powered Retail Analytics</h1>
-        <p>Upload a video to analyze customer movement.</p>
-        
-        <form id="upload-form" enctype="multipart/form-data">
-            <input type="file" id="video-file" accept="video/*" required>
-            <button type="submit">Analyze Video</button>
-        </form>
-        
-        <div id="result"></div>
+    <!-- App Container -->
+    <div class="app-layout">
+        <!-- Top Navigation -->
+        <header class="app-header">
+            <div class="header-left">
+                <div class="brand-logo">
+                    <span class="logo-icon">👁️</span>
+                    <span class="logo-text">Retail<span class="highlight">Vision</span></span>
+                </div>
+                <span class="version-tag">v2.0 • Edge AI</span>
+            </div>
+
+            <div class="header-center">
+                <div class="engine-status" id="engine-status-pill">
+                    <span class="status-dot pulsing"></span>
+                    <span id="engine-status-text">Edge Vision & Forecasting Online</span>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <button class="btn btn-secondary btn-sm" id="refresh-dashboard-btn">
+                    <span class="btn-icon">🔄</span> Refresh Data
+                </button>
+                <a href="#analyst-section" class="btn btn-primary btn-sm" id="nav-ask-analyst-btn">
+                    <span class="btn-icon">✨</span> Ask AI Analyst
+                </a>
+            </div>
+        </header>
+
+        <!-- Main Dashboard View -->
+        <main class="dashboard-main">
+            <!-- Hero Title & Subtitle -->
+            <section class="dashboard-hero">
+                <div class="hero-text">
+                    <h1 class="main-title">Store Intelligence Dashboard</h1>
+                    <p class="subtitle">Real-time video trajectory tracking, customer behavior segmentation, and neural footfall forecasting.</p>
+                </div>
+                <div class="last-updated" id="last-updated-text">Updating metrics...</div>
+            </section>
+
+            <!-- Executive KPI Ribbon -->
+            <section class="kpi-ribbon" aria-label="Key Performance Indicators">
+                <div class="kpi-card" id="kpi-total-tracks">
+                    <div class="kpi-icon-wrapper blue">👥</div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Unique Shoppers Tracked</span>
+                        <div class="kpi-value-row">
+                            <span class="kpi-value" id="val-total-shoppers">--</span>
+                            <span class="kpi-badge neutral" id="badge-video-count">-- videos</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="kpi-card" id="kpi-dwell-time">
+                    <div class="kpi-icon-wrapper emerald">⏱️</div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Avg. Dwell Time</span>
+                        <div class="kpi-value-row">
+                            <span class="kpi-value" id="val-avg-dwell">-- s</span>
+                            <span class="kpi-badge positive">Engagement</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="kpi-card" id="kpi-engaged-ratio">
+                    <div class="kpi-icon-wrapper purple">🎯</div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Engaged Shopper Ratio</span>
+                        <div class="kpi-value-row">
+                            <span class="kpi-value" id="val-engaged-ratio">--%</span>
+                            <span class="kpi-badge purple-badge" id="badge-shopper-type">High Intent</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="kpi-card" id="kpi-traffic-points">
+                    <div class="kpi-icon-wrapper amber">📈</div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Traffic Records Logged</span>
+                        <div class="kpi-value-row">
+                            <span class="kpi-value" id="val-traffic-count">--</span>
+                            <span class="kpi-badge amber-badge">Time-Series</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Two-Column Workspace -->
+            <div class="dashboard-grid">
+                <!-- Column Left: Video Pipeline & Zone Spatial Map -->
+                <div class="grid-column left-column">
+                    <!-- Video Upload & Analysis Card -->
+                    <div class="glass-card" id="video-ingestion-card">
+                        <div class="card-header">
+                            <div class="card-title-group">
+                                <span class="card-icon">📹</span>
+                                <h2>CCTV Video Ingestion & Tracking</h2>
+                            </div>
+                            <span class="card-tag">YOLOv8 + ByteTrack + CLIP</span>
+                        </div>
+                        <div class="card-body">
+                            <form id="video-upload-form" enctype="multipart/form-data">
+                                <div class="dropzone-container" id="video-dropzone">
+                                    <input type="file" id="video-file-input" name="file" accept="video/mp4,video/avi,video/mov,video/mkv" required>
+                                    <div class="dropzone-content">
+                                        <div class="upload-cloud-icon">⬆️</div>
+                                        <span class="dropzone-title">Drop store CCTV clip here or <span class="browse-link">browse</span></span>
+                                        <span class="dropzone-hints">Supports MP4, AVI, MOV • Model performs 3x frame striding</span>
+                                    </div>
+                                    <div class="selected-file-banner" id="selected-file-banner" style="display: none;">
+                                        <span class="file-icon">🎬</span>
+                                        <span class="file-name" id="selected-file-name">filename.mp4</span>
+                                        <button type="button" class="btn-clear-file" id="clear-file-btn" title="Remove file">✕</button>
+                                    </div>
+                                </div>
+
+                                <div class="options-row">
+                                    <label class="toggle-control" for="toggle-use-clip">
+                                        <input type="checkbox" id="toggle-use-clip" checked>
+                                        <span class="toggle-slider"></span>
+                                        <span class="toggle-label">Enable Zero-Shot CLIP Attribute Classification (Employee vs Shopper & Baskets)</span>
+                                    </label>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary btn-block" id="start-analysis-btn">
+                                    <span class="btn-icon">⚡</span> Run Edge Computer Vision Pipeline
+                                </button>
+                            </form>
+
+                            <!-- Analysis Progress Tracker -->
+                            <div class="analysis-progress-panel" id="analysis-progress-panel" style="display: none;">
+                                <div class="progress-header">
+                                    <span class="progress-title" id="progress-status-text">Processing Video...</span>
+                                    <span class="progress-pct" id="progress-pct-text">Running</span>
+                                </div>
+                                <div class="progress-bar-track">
+                                    <div class="progress-bar-fill animated" id="progress-bar-fill"></div>
+                                </div>
+                                <div class="pipeline-steps-status">
+                                    <span class="step-badge active" id="step-yolo">1. YOLOv8 Track</span>
+                                    <span class="step-badge" id="step-clip">2. CLIP Classify</span>
+                                    <span class="step-badge" id="step-kmeans">3. KMeans Segment</span>
+                                    <span class="step-badge" id="step-persist">4. SQLite Persist</span>
+                                </div>
+                            </div>
+
+                            <!-- Analysis Result Summary -->
+                            <div class="analysis-summary-card" id="analysis-summary-card" style="display: none;">
+                                <div class="summary-header">
+                                    <span class="success-icon">✓</span>
+                                    <h3>Video Analysis Complete</h3>
+                                </div>
+                                <div class="summary-metrics-grid">
+                                    <div class="summary-metric-box">
+                                        <span class="box-label">Unique People</span>
+                                        <span class="box-value" id="summary-unique-people">0</span>
+                                    </div>
+                                    <div class="summary-metric-box">
+                                        <span class="box-label">Clip Duration</span>
+                                        <span class="box-value" id="summary-duration">0.0s</span>
+                                    </div>
+                                    <div class="summary-metric-box">
+                                        <span class="box-label">Avg Dwell Time</span>
+                                        <span class="box-value" id="summary-dwell">0.0s</span>
+                                    </div>
+                                </div>
+                                <div class="summary-segments-row">
+                                    <span class="segments-label">Behavior Breakdown:</span>
+                                    <div class="segment-pill-list" id="summary-segment-pills">
+                                        <!-- Dynamic Pills -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Spatial Store 3x3 Heatmap Grid -->
+                    <div class="glass-card" id="zone-spatial-card">
+                        <div class="card-header">
+                            <div class="card-title-group">
+                                <span class="card-icon">🗺️</span>
+                                <h2>Spatial Zone Occupancy (3x3 Floor Grid)</h2>
+                            </div>
+                            <span class="card-tag">Viewport Density</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="section-desc">Store floor partitioned into a 3x3 matrix showing customer dwell density.</p>
+                            <div class="zone-grid-3x3" id="zone-matrix">
+                                <div class="zone-cell" data-zone="r0c0"><span class="zone-id">r0c0</span><span class="zone-count">0</span></div>
+                                <div class="zone-cell" data-zone="r0c1"><span class="zone-id">r0c1</span><span class="zone-count">0</span></div>
+                                <div class="zone-cell" data-zone="r0c2"><span class="zone-id">r0c2</span><span class="zone-count">0</span></div>
+                                <div class="zone-cell" data-zone="r1c0"><span class="zone-id">r1c0</span><span class="zone-count">0</span></div>
+                                <div class="zone-cell" data-zone="r1c1"><span class="zone-id">r1c1</span><span class="zone-count">0</span></div>
+                                <div class="zone-cell" data-zone="r1c2"><span class="zone-id">r1c2</span><span class="zone-count">0</span></div>
+                                <div class="zone-cell" data-zone="r2c0"><span class="zone-id">r2c0</span><span class="zone-count">0</span></div>
+                                <div class="zone-cell" data-zone="r2c1"><span class="zone-id">r2c1</span><span class="zone-count">0</span></div>
+                                <div class="zone-cell" data-zone="r2c2"><span class="zone-id">r2c2</span><span class="zone-count">0</span></div>
+                            </div>
+                            <div class="zone-legend">
+                                <span>Low Traffic</span>
+                                <div class="legend-gradient"></div>
+                                <span>High Traffic</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column Right: Charts, Forecast & Behavioral Clusters -->
+                <div class="grid-column right-column">
+                    <!-- Footfall & Forecast Chart Card -->
+                    <div class="glass-card" id="traffic-chart-card">
+                        <div class="card-header">
+                            <div class="card-title-group">
+                                <span class="card-icon">📊</span>
+                                <h2>Store Footfall & LSTM Predictive Curve</h2>
+                            </div>
+                            <div class="chart-tab-group">
+                                <button class="chart-tab-btn active" id="tab-btn-both">Combined Trend</button>
+                                <button class="chart-tab-btn" id="tab-btn-forecast">Next 6h Forecast</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-status-strip" id="forecast-status-strip">
+                                <span class="forecast-pill" id="forecast-status-badge">LSTM Forecaster Active</span>
+                                <span class="forecast-meta" id="forecast-meta-text">6-hour rolling autoregressive window</span>
+                            </div>
+                            <div class="chart-canvas-wrapper">
+                                <canvas id="trafficChart" height="230"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Behavioral Segmentation & Role Demographics -->
+                    <div class="glass-card" id="behavioral-segments-card">
+                        <div class="card-header">
+                            <div class="card-title-group">
+                                <span class="card-icon">🧠</span>
+                                <h2>Shopper Behavior & Role Segmentation</h2>
+                            </div>
+                            <span class="card-tag">Unsupervised KMeans + CLIP</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="segments-split-layout">
+                                <div class="segments-chart-half">
+                                    <div class="chart-canvas-wrapper donut-wrapper">
+                                        <canvas id="segmentsDonutChart" height="190"></canvas>
+                                    </div>
+                                </div>
+                                <div class="segments-details-half" id="segments-breakdown-list">
+                                    <div class="segment-row" id="row-engaged">
+                                        <div class="row-header">
+                                            <span class="indicator-dot purple"></span>
+                                            <span class="row-title">Engaged Shopper</span>
+                                        </div>
+                                        <span class="row-desc">Long dwell time, slow speed, active browsing</span>
+                                        <div class="row-stats"><span class="stat-count" id="count-engaged">0</span> shoppers</div>
+                                    </div>
+                                    <div class="segment-row" id="row-browser">
+                                        <div class="row-header">
+                                            <span class="indicator-dot blue"></span>
+                                            <span class="row-title">Casual Browser</span>
+                                        </div>
+                                        <span class="row-desc">Moderate dwell time and wandering trajectory</span>
+                                        <div class="row-stats"><span class="stat-count" id="count-browser">0</span> shoppers</div>
+                                    </div>
+                                    <div class="segment-row" id="row-passer">
+                                        <div class="row-header">
+                                            <span class="indicator-dot amber"></span>
+                                            <span class="row-title">Passer-By</span>
+                                        </div>
+                                        <span class="row-desc">Fast trajectory speed, transit through store</span>
+                                        <div class="row-stats"><span class="stat-count" id="count-passer">0</span> shoppers</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conversational AI Retail Analyst Terminal Section -->
+            <section class="analyst-section" id="analyst-section">
+                <div class="glass-card analyst-card">
+                    <div class="card-header">
+                        <div class="card-title-group">
+                            <span class="card-icon">🤖</span>
+                            <h2>AI Retail Business Analyst</h2>
+                        </div>
+                        <span class="card-tag" id="analyst-model-tag">Local Qwen 2.5 1.5B (Safe Read-Only SQL)</span>
+                    </div>
+
+                    <div class="card-body analyst-body">
+                        <!-- Quick Question Prompt Chips -->
+                        <div class="prompt-chips-bar">
+                            <span class="chips-label">Quick Inquiries:</span>
+                            <button class="prompt-chip" data-query="What is the store traffic forecast for the next few hours?">🔮 Next hours forecast</button>
+                            <button class="prompt-chip" data-query="How many unique customers were engaged shoppers vs browsers?">🛍️ Shopper engagement breakdown</button>
+                            <button class="prompt-chip" data-query="Which store zone has the highest customer traffic?">📍 Busiest zone</button>
+                            <button class="prompt-chip" data-query="What is the average dwell time of people carrying a shopping basket?">🛒 Basket carrier dwell time</button>
+                        </div>
+
+                        <!-- Chat & Response Area -->
+                        <div class="analyst-chat-box" id="analyst-chat-display">
+                            <div class="chat-message assistant-message">
+                                <div class="msg-avatar">🤖</div>
+                                <div class="msg-content">
+                                    <p>Hello! I am your <strong>RetailVision AI Analyst</strong>. Ask me anything about customer traffic patterns, dwell times, shopper roles, or footfall predictions.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Question Input Form -->
+                        <form id="analyst-query-form" class="analyst-input-form">
+                            <div class="input-wrapper">
+                                <input type="text" id="analyst-query-input" placeholder="Ask a business analytics question (e.g. 'What were peak store hours?')" required autocomplete="off">
+                                <button type="submit" class="btn btn-primary" id="analyst-submit-btn">
+                                    <span class="btn-text">Ask Analyst</span>
+                                    <span class="btn-icon">➤</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="footer-content">
+                <span>RetailVision • Autonomous In-Store Video Analytics</span>
+                <span class="footer-divider">•</span>
+                <span>Ultralytics YOLOv8 • ByteTrack • OpenAI CLIP • PyTorch LSTM • Qwen 2.5</span>
+            </div>
+        </footer>
     </div>
 
-    <script>
-        document.getElementById("upload-form").onsubmit = async function(event) {
-            event.preventDefault();
-            let fileInput = document.getElementById("video-file").files[0];
-
-            if (!fileInput) {
-                alert("Please select a video file.");
-                return;
-            }
-
-            let formData = new FormData();
-            formData.append("file", fileInput);
-
-            let response = await fetch("/analyze_video/", {
-                method: "POST",
-                body: formData
-            });
-
-            let result = await response.json();
-            document.getElementById("result").innerHTML = 
-                `<p>People Count: <strong>${result.people_count}</strong></p>
-                 <p>Timestamp: <strong>${result.timestamp}</strong></p>`;
-        };
-    </script>
+    <!-- Application Dashboard Logic -->
+    <script src="/static/dashboard.js"></script>
 </body>
 </html>
