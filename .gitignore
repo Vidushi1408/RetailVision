@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+*.pt
+*.mp4
+*.avi
+.DS_Store
+data/
