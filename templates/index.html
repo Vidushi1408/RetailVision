@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <!-- Chart.js for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=3">
 </head>
 <body>
     <!-- App Container -->
@@ -59,7 +59,7 @@
                 <div class="kpi-card" id="kpi-total-tracks">
                     <div class="kpi-icon-wrapper blue">👥</div>
                     <div class="kpi-content">
-                        <span class="kpi-label">Unique Shoppers Tracked</span>
+                        <span class="kpi-label">People Tracked (estimate)</span>
                         <div class="kpi-value-row">
                             <span class="kpi-value" id="val-total-shoppers">--</span>
                             <span class="kpi-badge neutral" id="badge-video-count">-- videos</span>
@@ -92,10 +92,21 @@
                 <div class="kpi-card" id="kpi-traffic-points">
                     <div class="kpi-icon-wrapper amber">📈</div>
                     <div class="kpi-content">
-                        <span class="kpi-label">Traffic Records Logged</span>
+                        <span class="kpi-label">Average Occupancy</span>
                         <div class="kpi-value-row">
                             <span class="kpi-value" id="val-traffic-count">--</span>
-                            <span class="kpi-badge amber-badge">Time-Series</span>
+                            <span class="kpi-badge amber-badge" id="badge-peak-occupancy">peak --</span>
+                        </div>
+                    </div>
+                </div>
+            
+                <div class="kpi-card" id="kpi-crossings">
+                    <div class="kpi-icon-wrapper blue">🚪</div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Line Crossings (in / out)</span>
+                        <div class="kpi-value-row">
+                            <span class="kpi-value" id="val-crossings">--</span>
+                            <span class="kpi-badge neutral">Entrance line</span>
                         </div>
                     </div>
                 </div>
@@ -112,7 +123,7 @@
                                 <span class="card-icon">📹</span>
                                 <h2>CCTV Video Ingestion & Tracking</h2>
                             </div>
-                            <span class="card-tag">YOLOv8 + ByteTrack + CLIP</span>
+                            <span class="card-tag">YOLOv8 + ByteTrack</span>
                         </div>
                         <div class="card-body">
                             <form id="video-upload-form" enctype="multipart/form-data">
@@ -132,9 +143,9 @@
 
                                 <div class="options-row">
                                     <label class="toggle-control" for="toggle-use-clip">
-                                        <input type="checkbox" id="toggle-use-clip" checked>
+                                        <input type="checkbox" id="toggle-use-clip">
                                         <span class="toggle-slider"></span>
-                                        <span class="toggle-label">Enable Zero-Shot CLIP Attribute Classification (Employee vs Shopper & Baskets)</span>
+                                        <span class="toggle-label">Try CLIP attributes (experimental, off by default: inaccurate on low-resolution CCTV)</span>
                                     </label>
                                 </div>
 
@@ -154,7 +165,7 @@
                                 </div>
                                 <div class="pipeline-steps-status">
                                     <span class="step-badge active" id="step-yolo">1. YOLOv8 Track</span>
-                                    <span class="step-badge" id="step-clip">2. CLIP Classify</span>
+                                    <span class="step-badge" id="step-clip">2. Count &amp; Cross</span>
                                     <span class="step-badge" id="step-kmeans">3. KMeans Segment</span>
                                     <span class="step-badge" id="step-persist">4. SQLite Persist</span>
                                 </div>
@@ -168,12 +179,20 @@
                                 </div>
                                 <div class="summary-metrics-grid">
                                     <div class="summary-metric-box">
-                                        <span class="box-label">Unique People</span>
+                                        <span class="box-label">People Tracked (est.)</span>
                                         <span class="box-value" id="summary-unique-people">0</span>
                                     </div>
                                     <div class="summary-metric-box">
                                         <span class="box-label">Clip Duration</span>
                                         <span class="box-value" id="summary-duration">0.0s</span>
+                                    </div>
+                                    <div class="summary-metric-box">
+                                        <span class="box-label">Occupancy (mean / peak)</span>
+                                        <span class="box-value" id="summary-occupancy">--</span>
+                                    </div>
+                                    <div class="summary-metric-box">
+                                        <span class="box-label">Line Crossings (in / out)</span>
+                                        <span class="box-value" id="summary-crossings">--</span>
                                     </div>
                                     <div class="summary-metric-box">
                                         <span class="box-label">Avg Dwell Time</span>
@@ -251,9 +270,9 @@
                         <div class="card-header">
                             <div class="card-title-group">
                                 <span class="card-icon">🧠</span>
-                                <h2>Shopper Behavior & Role Segmentation</h2>
+                                <h2>Shopper Behavior Segmentation</h2>
                             </div>
-                            <span class="card-tag">Unsupervised KMeans + CLIP</span>
+                            <span class="card-tag">Unsupervised KMeans</span>
                         </div>
                         <div class="card-body">
                             <div class="segments-split-layout">
@@ -351,6 +370,6 @@
     </div>
 
     <!-- Application Dashboard Logic -->
-    <script src="/static/dashboard.js"></script>
+    <script src="/static/dashboard.js?v=3"></script>
 </body>
 </html>

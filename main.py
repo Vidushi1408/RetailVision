@@ -116,6 +116,9 @@ def get_overview():
     zone_rows = conn.execute("SELECT zone, COUNT(*) count FROM tracks WHERE zone IS NOT NULL GROUP BY zone").fetchall()
     zones = {r["zone"]: r["count"] for r in zone_rows}
 
+    occ = conn.execute("SELECT ROUND(AVG(people_count), 1), MAX(people_count) FROM customer_traffic").fetchone()
+    cross = {r["direction"]: r["n"] for r in conn.execute(
+        "SELECT direction, COUNT(*) n FROM crossings GROUP BY direction").fetchall()}
     recent_videos = [dict(r) for r in conn.execute("SELECT * FROM videos ORDER BY id DESC LIMIT 5").fetchall()]
     traffic_points = conn.execute("SELECT COUNT(*) FROM customer_traffic").fetchone()[0]
     conn.close()
@@ -127,6 +130,10 @@ def get_overview():
         "engaged_pct": engaged_pct,
         "zones": zones,
         "traffic_points": traffic_points,
+        "avg_occupancy": occ[0],
+        "peak_occupancy": occ[1],
+        "crossings_in": cross.get("in", 0),
+        "crossings_out": cross.get("out", 0),
         "recent_videos": recent_videos
     }
 

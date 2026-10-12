@@ -26,6 +26,10 @@ SQL_SYSTEM = """You write exactly one SQLite SELECT query that answers the quest
 Rules:
 - One row of `tracks` = one person. For counts or stats about people, shoppers, visitors, segments,
   zones, roles or dwell time use `tracks`. Use `customer_traffic` only for people counts over time.
+- passer-by, browser and engaged-shopper are values of the `segment` column. `role` only holds
+  customer, employee or unknown.
+- Questions about people crossing, entering, leaving, "going in" or "going out" use `crossings`
+  (one row per person per crossing): COUNT(*) with a WHERE on direction.
 - Use `videos` only for questions about videos. Do not JOIN tables unless the question needs it.
 - Add a WHERE filter only if the question explicitly names it. Never invent filters.
 - "per X" / "each X" means GROUP BY X and select X together with the aggregate.
@@ -34,6 +38,8 @@ Rules:
 """ + SCHEMA + """
 
 Examples:
+Q: How many of the people are browsers?
+SQL: SELECT COUNT(*) FROM tracks WHERE segment='browser'
 Q: How many tracked people were classified as employees?
 SQL: SELECT COUNT(*) FROM tracks WHERE role='employee'
 Q: What is the average speed of all people?
@@ -50,6 +56,10 @@ Q: How many videos are longer than 100 seconds?
 SQL: SELECT COUNT(*) FROM videos WHERE duration_sec > 100
 Q: At what time did the people count reach its lowest?
 SQL: SELECT timestamp FROM customer_traffic ORDER BY people_count ASC LIMIT 1
+Q: How many people left through the line?
+SQL: SELECT COUNT(*) FROM crossings WHERE direction='out'
+Q: How many crossings were there in each direction?
+SQL: SELECT direction, COUNT(*) FROM crossings GROUP BY direction
 Q: What is the average path length per zone?
 SQL: SELECT zone, AVG(path_length) FROM tracks GROUP BY zone"""
 

@@ -46,10 +46,13 @@ async function loadOverviewMetrics() {
 
         // Update KPI values
         document.getElementById("val-total-shoppers").textContent = data.total_tracks || "0";
-        document.getElementById("badge-video-count").textContent = `${data.video_count || 0} videos`;
+        document.getElementById("badge-video-count").textContent = `${data.video_count || 0} video${data.video_count === 1 ? "" : "s"}`;
         document.getElementById("val-avg-dwell").textContent = `${data.avg_dwell_sec || 0}s`;
         document.getElementById("val-engaged-ratio").textContent = `${data.engaged_pct || 0}%`;
-        document.getElementById("val-traffic-count").textContent = data.traffic_points || "0";
+        document.getElementById("val-traffic-count").textContent = data.avg_occupancy ?? "--";
+        document.getElementById("badge-peak-occupancy").textContent = `peak ${data.peak_occupancy ?? "--"}`;
+        document.getElementById("val-crossings").textContent =
+            data.video_count ? `${data.crossings_in || 0} / ${data.crossings_out || 0}` : "--";
 
         // Update 3x3 Zone Matrix
         updateZoneGrid(data.zones || {});
@@ -412,6 +415,11 @@ function initVideoUpload() {
             // Populate Summary Card
             document.getElementById("summary-unique-people").textContent = result.unique_people || result.people_count || 0;
             document.getElementById("summary-duration").textContent = `${result.duration_sec || 0}s`;
+            const occ = result.occupancy || {};
+            document.getElementById("summary-occupancy").textContent = `${occ.mean ?? "--"} / ${occ.peak ?? "--"}`;
+            const cross = Object.values(result.crossings || {});
+            const cin = cross.reduce((a, c) => a + c.in, 0), cout = cross.reduce((a, c) => a + c.out, 0);
+            document.getElementById("summary-crossings").textContent = cross.length ? `${cin} / ${cout}` : "--";
             document.getElementById("summary-dwell").textContent = `${result.avg_dwell_sec || 0}s`;
 
             const pillList = document.getElementById("summary-segment-pills");

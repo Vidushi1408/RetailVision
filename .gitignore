@@ -9,3 +9,5 @@ __pycache__/
 *.avi
 .DS_Store
 data/
+*.bak
+.claude/
