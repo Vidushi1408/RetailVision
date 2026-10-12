@@ -1,5 +1,16 @@
-"""Data classification: CLIP zero-shot attributes + KMeans behaviour segments."""
+"""Data classification: CLIP zero-shot attributes + KMeans behaviour segments.
+
+CLIP staff/customer and carrying attributes are OFF by default: on 640x480 mall CCTV
+(~90-190 px person crops) they scored below the majority-class baseline (see PLAN.md
+section 10). Set ENABLE_CLIP_ATTRIBUTES=1 to turn them on for higher-resolution footage.
+"""
+import os
+
 import numpy as np
+
+
+def attributes_enabled():
+    return os.getenv("ENABLE_CLIP_ATTRIBUTES", "0") == "1"
 
 _clip = {}
 
@@ -44,7 +55,8 @@ MIN_CROP_HEIGHT = 128  # px; below this CLIP is confidently wrong (Phase 1: 58/6
 
 def classify_person(crop_bgr):
     """Return (role, carrying), or ("unknown", "unknown") when the crop is too small to judge."""
-    if crop_bgr is None or crop_bgr.size == 0 or crop_bgr.shape[0] < MIN_CROP_HEIGHT:
+    if (not attributes_enabled() or crop_bgr is None or crop_bgr.size == 0
+            or crop_bgr.shape[0] < MIN_CROP_HEIGHT):
         return "unknown", "unknown"
     role, _ = clip_zero_shot(crop_bgr, ROLE_LABELS)
     carry, _ = clip_zero_shot(crop_bgr, CARRY_LABELS)

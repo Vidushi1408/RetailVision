@@ -1,7 +1,7 @@
 """End-to-end video analysis: track -> classify -> segment -> persist."""
 import datetime
 
-from .classifier import classify_person, segment_shoppers
+from .classifier import attributes_enabled, classify_person, segment_shoppers
 from .db import connect
 from .tracker import track_features, track_video
 
@@ -17,7 +17,7 @@ def analyze(path, filename, use_clip=True):
     vid = conn.execute("INSERT INTO videos (filename, fps, duration_sec, created) VALUES (?,?,?,?)",
                        (filename, meta["fps"], meta["duration_sec"], now.isoformat())).lastrowid
     for i, f, seg in zip(ids, feats, segments):
-        role, carry = classify_person(crops.get(i)) if use_clip else ("unknown", "unknown")
+        role, carry = classify_person(crops.get(i)) if use_clip and attributes_enabled() else ("unknown", "unknown")
         conn.execute("""INSERT INTO tracks (video_id, track_id, first_sec, last_sec, dwell_sec,
                         path_length, avg_speed, stationary_ratio, zone, role, carrying, segment)
                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",

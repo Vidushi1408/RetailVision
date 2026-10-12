@@ -156,3 +156,48 @@ Actions this triggers
 - CI: `.github/workflows/ci.yml` runs both test files. Not yet run on GitHub; requirements were
   pinned from a Python 3.14 venv, so the workflow may need a different Python version.
 - Remaining: job state is in memory (lost on restart; fine for a single-process demo).
+
+## 10. Workstream B results: classification on low-resolution CCTV
+
+Data: the 60 largest merged tracks of `data/mall_clip.mp4`, best crop per track (87-188 px tall,
+median 130), hand-labelled by one annotator from contact sheets (`evaluation/bag_labels.py`).
+54 usable labels: 20 carrying a bag, 34 not. Majority-class accuracy 0.63. Small and noisy;
+treat as a rough check.
+
+| Method (carrying a bag) | Accuracy | Precision | Recall | F1 |
+|---|---|---|---|---|
+| Majority class ("no bag") | 0.63 | - | 0 | 0 |
+| CLIP zero-shot, current wording | 0.54 | 0.33 | 0.25 | 0.29 |
+| CLIP zero-shot, ensemble prompts | 0.48 | 0.40 | 0.85 | 0.55 |
+| CLIP linear probe (LOO-CV, 54 samples) | 0.52-0.59 | 0.40-0.45 | 0.45-0.60 | 0.45-0.49 |
+
+- No CLIP variant beats the trivial baseline on accuracy; the size gate does not help
+  (crops >=128 px: accuracy 0.48 vs 0.76 majority).
+- Staff vs customer cannot be evaluated: there is no visible uniform in this footage, and the
+  earlier zero-shot output (58 of 60 "employee" at 84% confidence) is clearly wrong.
+- Decision: CLIP attributes are OFF by default (`ENABLE_CLIP_ATTRIBUTES=1` to enable); the
+  pipeline stores `unknown` rather than a wrong label. Revisit with >=256 px crops or a model
+  trained on a person-attribute dataset (PA-100K / Market-1501; images are behind Google
+  Drive/Baidu links, so not fetched here).
+
+### Re-identification and identity fragmentation
+- Same-person similarity check on 9 crops I believed were one person: CLIP image embeddings
+  AUC 0.46 (chance); HSV colour histograms AUC 0.86.
+- CORRECTION: those 9 tracks overlap in time over 100+ s at different positions, so they are not
+  one person; my visual identification was wrong or they are several similarly dressed people.
+  The AUC numbers above rest on that guess and are therefore unreliable.
+- Track quality on the mall clip (200 s, ~26 people in view):
+
+| Variant | Tracks | Low coverage (<0.5) | Spans > 60 s |
+|---|---|---|---|
+| Raw ByteTrack | 352 | 39% | 24 |
+| Merge, no guard | 267 | 44% | 32 |
+| Merge + coverage guard (default) | 296 | 43% | 25 |
+| + appearance gate (`use_appearance=True`, off) | 291 | 44% | 25 |
+
+- Coverage guard added to `merge_fragments`: refuses merges that would be observed in <50% of
+  their span (chains of different people inflate dwell).
+- Honest conclusion: the unique-visitor count is somewhere between ~230 and ~350 for this clip
+  and cannot be pinned down without identity ground truth (e.g. MOT17/MOT20 annotations or a
+  hand-tracked 30 s window). Prefer robust metrics for reporting: average occupancy (people
+  present), peak occupancy, and line-crossing counts at an entrance.

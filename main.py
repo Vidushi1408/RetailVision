@@ -21,7 +21,7 @@ ALLOWED_EXT = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 
 @asynccontextmanager
 async def lifespan(_app):
-    if os.getenv("PRELOAD_MODELS", "yolo,clip,llm") not in ("", "none"):
+    if os.getenv("PRELOAD_MODELS", "yolo,llm") not in ("", "none"):
         from retailvision.preload import preload
         threading.Thread(target=preload, daemon=True).start()  # don't delay startup
     yield

@@ -42,7 +42,8 @@ Then build `data/mall_counts.npy` from `mall_dataset/mall_gt.mat` (`count` array
 ## Configuration (environment variables)
 | Variable | Default | Meaning |
 |---|---|---|
-| `PRELOAD_MODELS` | `yolo,clip,llm` | Models loaded at server start in a background thread. `none` disables (tests/CI). |
+| `PRELOAD_MODELS` | `yolo,llm` | Models loaded at server start in a background thread. `none` disables (tests/CI). |
+| `ENABLE_CLIP_ATTRIBUTES` | `0` | `1` enables CLIP staff/customer + carrying labels. Off because they were not accurate on 640x480 CCTV. |
 | `MAX_UPLOAD_MB` | `500` | Upload size limit (HTTP 413 above it). |
 | `LOCAL_LLM` | `Qwen/Qwen2.5-1.5B-Instruct` | Local model used by `/ask/`. |
 
