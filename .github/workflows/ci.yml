@@ -25,4 +25,4 @@ jobs:
       - name: Unit, API, end-to-end and browser tests
         env:
           PRELOAD_MODELS: none
-        run: python -m unittest test_retailvision test_api test_counting test_security test_e2e test_features test_browser -v
+        run: python -m unittest test_retailvision test_api test_counting test_security test_e2e test_features test_analyst test_browser -v

@@ -145,6 +145,29 @@ class TestDashboardInBrowser(unittest.TestCase):
         self.assertIn("cannot be undone", dialogs[0])
         self.assertEqual(requests.get(self.base + "/overview/").json()["total_tracks"], 0)
 
+    def test_6_analyst_labels_executed_and_failed_queries_honestly(self):
+        from retailvision import llm_analyst
+        self.page.goto(self.base)
+        box, send = self.page.locator("#analyst-query-input"), self.page.locator("#analyst-submit-btn")
+        chat = self.page.locator("#analyst-chat-display")
+
+        replies = iter(["SELECT COUNT(*) AS n FROM tracks", "There are some tracks."])
+        with mock.patch.object(llm_analyst, "_generate", lambda *a, **k: next(replies)):
+            box.fill("how many people?")
+            send.click()
+            expect(chat).to_contain_text("Executed SQL", timeout=15000)
+        expect(chat).to_contain_text("Result (1 row)")
+        expect(chat).not_to_contain_text("Not executed")
+
+        replies = iter(["SELECT nonsense FROM tracks", "SELECT nonsense FROM tracks"])
+        with mock.patch.object(llm_analyst, "_generate", lambda *a, **k: next(replies)):
+            box.fill("something unanswerable")
+            send.click()
+            expect(chat).to_contain_text("Not executed", timeout=15000)
+        # the failed query must never be presented as executed
+        last = chat.locator(".sql-failed").last
+        expect(last).to_contain_text("SELECT nonsense FROM tracks")
+
     def test_5_dashboard_asks_for_key_once_when_server_requires_one(self):
         with mock.patch.dict(os.environ, {"RETAILVISION_API_KEY": "browser-key"}):
             prompts = []

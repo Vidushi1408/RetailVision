@@ -6,6 +6,8 @@ the rows in plain English. Forecast questions are routed to our own LSTM.
 """
 import os
 import re
+import sqlite3
+import threading
 
 from .sqlguard import QueryRejected, QueryTimeout, execute_readonly
 from .forecast import forecast
@@ -33,11 +35,27 @@ Rules:
 - Use `videos` only for questions about videos. Do not JOIN tables unless the question needs it.
 - Add a WHERE filter only if the question explicitly names it. Never invent filters.
 - "per X" / "each X" means GROUP BY X and select X together with the aggregate.
-- Use only the columns listed in the schema.
+- Use only the columns listed in the schema. There is no `customer`, `person`, `visitors` or
+  `traffic` column; `zone` exists only in `tracks`.
+- `role` is "unknown" for almost every row (staff/customer labelling is switched off), so never
+  filter on role unless the question explicitly asks about employees or staff.
+- Customers, shoppers, visitors, people seen or tracked all mean rows of `tracks`: count them
+  with COUNT(*) FROM tracks. `people_count` is how many people were visible at one moment, so
+  use MAX or AVG on it and never SUM it to count people.
+- "Busiest zone", "most visited area" or "zone traffic" mean the zone with the most rows in
+  `tracks`: GROUP BY zone ORDER BY COUNT(*) DESC.
 
 """ + SCHEMA + """
 
 Examples:
+Q: Which area of the store is visited the most?
+SQL: SELECT zone FROM tracks GROUP BY zone ORDER BY COUNT(*) DESC LIMIT 1
+Q: How many visitors did we detect overall?
+SQL: SELECT COUNT(*) FROM tracks
+Q: What was the highest number of people present at once?
+SQL: SELECT MAX(people_count) FROM customer_traffic
+Q: How many shoppers are engaged compared with passers-by?
+SQL: SELECT segment, COUNT(*) FROM tracks WHERE segment IN ('engaged-shopper','passer-by') GROUP BY segment
 Q: How many of the people are browsers?
 SQL: SELECT COUNT(*) FROM tracks WHERE segment='browser'
 Q: How many tracked people were classified as employees?
@@ -66,19 +84,38 @@ SQL: SELECT zone, AVG(path_length) FROM tracks GROUP BY zone"""
 from .device import get_device
 
 _llm = {}
+_llm_lock = threading.Lock()
+
+
+def _load_models():
+    """Load tokenizer and model. Pure function: nothing is published until both exist."""
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    dev = get_device()
+    dtype = torch.float16 if dev in ("cuda", "mps") else torch.float32
+    tok = AutoTokenizer.from_pretrained(MODEL_NAME)
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_NAME, torch_dtype=dtype, low_cpu_mem_usage=True).to(dev).eval()
+    return {"tok": tok, "model": model, "dev": dev}
+
+
+def is_ready():
+    return bool(_llm.get("ready"))
 
 
 def load_llm():
-    import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    if not _llm:
-        dev = get_device()
-        dtype = torch.float16 if dev in ("cuda", "mps") else torch.float32
-        _llm["tok"] = AutoTokenizer.from_pretrained(MODEL_NAME)
-        _llm["model"] = AutoModelForCausalLM.from_pretrained(
-            MODEL_NAME, torch_dtype=dtype, low_cpu_mem_usage=True
-        ).to(dev).eval()
-        _llm["dev"] = dev
+    """Thread-safe, load-once. The startup preload and the first question can arrive together:
+    the old version published the tokenizer before the model existed, so a question arriving
+    mid-load skipped loading and crashed with KeyError('model'). Now later callers wait on the
+    lock, and `ready` is set only after everything is in place."""
+    if _llm.get("ready"):
+        return
+    with _llm_lock:
+        if _llm.get("ready"):
+            return
+        loaded = _load_models()
+        _llm.update(loaded)
+        _llm["ready"] = True
 
 
 def _generate_local(system, user, max_new_tokens=200):
@@ -108,23 +145,123 @@ def _safe_select(sql):
     return sql
 
 
+def _column_hint(error_text):
+    """For 'no such column: x' say which allowed table(s) actually contain x. The model often
+    uses the right idea on the wrong table, and repeats itself unless told where the column is."""
+    m = re.search(r"no such column: (?:\w+\.)?(\w+)", error_text)
+    if not m:
+        return ""
+    wanted, owners = m.group(1).lower(), []
+    from .db import connect
+    from .sqlguard import ALLOWED_TABLES
+    conn = connect()
+    try:
+        for t in sorted(ALLOWED_TABLES):
+            if wanted in {r["name"].lower() for r in conn.execute(f"PRAGMA table_info({t})")}:
+                owners.append(t)
+    finally:
+        conn.close()
+    if owners:
+        return f" The column `{wanted}` does not exist in that table; it exists only in: {', '.join(owners)}."
+    return f" There is no column named `{wanted}` anywhere; remove it or use a listed column."
+
+
+def drop_unusable_role_filter(sql):
+    """Remove `role = 'customer'|'employee'` predicates when attribute labelling is off.
+
+    With ENABLE_CLIP_ATTRIBUTES unset every row has role 'unknown', so such a filter can only
+    return zero rows. Dropping it is correct by construction, not a guess about intent.
+    """
+    from .classifier import attributes_enabled
+    if attributes_enabled():
+        return sql
+    pred = r"role\s*=\s*'(?:customer|employee)'"
+    out = re.sub(rf"\s+WHERE\s+{pred}\s+AND\s+", " WHERE ", sql, flags=re.I)
+    out = re.sub(rf"\s+AND\s+{pred}", "", out, flags=re.I)
+    out = re.sub(rf"\s+WHERE\s+{pred}", "", out, flags=re.I)
+    return out
+
+
+def swap_to_owning_table(sql, error_text):
+    """Single-table query that names a column living in exactly one other allowed table:
+    point it at that table (e.g. `direction` is in `crossings`, not `tracks`)."""
+    m = re.search(r"no such column: (?:\w+\.)?(\w+)", error_text)
+    if not m or re.search(r"\bjoin\b", sql, re.I):
+        return None
+    tables = re.findall(r"\bFROM\s+(\w+)", sql, flags=re.I)
+    if len(tables) != 1:
+        return None
+    from .db import connect
+    from .sqlguard import ALLOWED_TABLES
+    wanted, owners = m.group(1).lower(), []
+    conn = connect()
+    try:
+        for t in sorted(ALLOWED_TABLES):
+            if wanted in {r["name"].lower() for r in conn.execute(f"PRAGMA table_info({t})")}:
+                owners.append(t)
+    finally:
+        conn.close()
+    if len(owners) != 1 or owners[0].lower() == tables[0].lower():
+        return None
+    return re.sub(rf"\bFROM\s+{tables[0]}\b", f"FROM {owners[0]}", sql, count=1, flags=re.I)
+
+
+def sql_with_repair(question, max_attempts=2):
+    """Generate SQL for `question`, run it, and on a SQL error show the model the error and let
+    it correct the query once (small models often invent a column on the first try).
+
+    Returns {"sql", "rows", "truncated", "executed", "attempts", "error"}; `executed` is True
+    only if a query actually ran and returned.
+    """
+    sql = _safe_select(_generate(SQL_SYSTEM, "Q: " + question + "\nSQL:"))
+    if sql is not None:
+        sql = drop_unusable_role_filter(sql)
+    out = {"sql": sql, "rows": None, "truncated": False, "executed": False, "attempts": 0, "error": None}
+    if sql is None:
+        out["error"] = "The model did not produce a single SELECT statement."
+        return out
+    for attempt in range(1, max_attempts + 2):  # +1: a deterministic swap does not use a model call
+        out["attempts"], out["sql"] = attempt, sql
+        try:
+            out["rows"], out["truncated"] = execute_readonly(sql)
+            out["executed"], out["error"] = True, None
+            return out
+        except QueryRejected as e:  # policy decision, not something to "repair" around
+            out["error"] = str(e)
+            return out
+        except QueryTimeout as e:
+            out["error"] = f"{e} Try a narrower question."
+            return out
+        except (sqlite3.OperationalError, sqlite3.ProgrammingError) as e:
+            out["error"] = f"The query failed: {e}"
+            swapped = swap_to_owning_table(sql, str(e))
+            if swapped is not None and swapped != sql:  # deterministic fix beats asking again
+                sql = swapped
+                continue
+            if attempt >= max_attempts + 1:
+                return out
+            fixed = _safe_select(_generate(
+                SQL_SYSTEM,
+                f"Q: {question}\nSQL: {sql}\nThat query failed with: {e}.{_column_hint(str(e))}\n"
+                "Write a corrected single SELECT. Use only the tables and columns in the schema.\nSQL:"))
+            if fixed is None or fixed == sql:
+                return out
+            sql = fixed
+    return out
+
+
 def ask(question):
     if any(w in question.lower() for w in FORECAST_WORDS):
-        return {"answer": "Footfall forecast from our LSTM model.", "data": forecast()}
+        return {"answer": "Footfall forecast from our LSTM model.", "data": forecast(), "executed": False}
 
-    sql = _safe_select(_generate(SQL_SYSTEM, "Q: " + question + "\nSQL:"))
-    if sql is None:
-        return {"answer": "I could not turn that into a safe query. Try rephrasing."}
-    try:
-        rows, truncated = execute_readonly(sql)
-    except QueryRejected as e:
-        return {"answer": str(e), "sql": sql}
-    except QueryTimeout as e:
-        return {"answer": f"{e} Try a narrower question.", "sql": sql}
-    except Exception as e:
-        return {"answer": f"The generated query failed: {e}", "sql": sql}
+    r = sql_with_repair(question)
+    if not r["executed"]:
+        msg = r["error"] or "I could not turn that into a query."
+        return {"answer": f"I could not answer that from the data. {msg} Try rephrasing the question.",
+                "sql": r["sql"], "executed": False, "attempts": r["attempts"], "error": r["error"]}
     answer = _generate("You are a retail analytics assistant. Using only the data given, "
                        "answer the question in 1-3 simple sentences.",
-                       f"Question: {question}\nSQL: {sql}\nRows: {rows}"
-                       + ("\n(Only the first rows are shown; there are more.)" if truncated else ""))
-    return {"answer": answer, "sql": sql, "rows": rows, "truncated": truncated}
+                       f"Question: {question}\nSQL: {r['sql']}\nRows: {r['rows']}"
+                       + ("\n(Only the first rows are shown; there are more.)" if r["truncated"] else ""))
+    return {"answer": answer, "sql": r["sql"], "rows": r["rows"], "truncated": r["truncated"],
+            "executed": True, "attempts": r["attempts"]}

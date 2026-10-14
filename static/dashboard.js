@@ -503,8 +503,18 @@ function initAnalystForm() {
             removeChatMessage(thinkingId);
 
             let contentHtml = `<p>${escapeHtml(data.answer || "No response received.")}</p>`;
-            if (data.sql) {
-                contentHtml += `<span class="sql-badge">Executed SQL: ${escapeHtml(data.sql)}</span>`;
+            if (data.sql && data.executed === false) {
+                // the query was generated but did not run: say so, never "Executed"
+                contentHtml += `<span class="sql-badge sql-failed">Not executed. Query was: ${escapeHtml(data.sql)}</span>`;
+            } else if (data.sql) {
+                const retried = data.attempts > 1 ? ` (corrected after ${data.attempts - 1} retry)` : "";
+                contentHtml += `<span class="sql-badge">Executed SQL${retried}: ${escapeHtml(data.sql)}</span>`;
+                if (Array.isArray(data.rows)) {
+                    const shown = data.rows.slice(0, 5).map(r =>
+                        Object.entries(r).map(([k, v]) => `${k}=${v}`).join(", ")).join(" | ");
+                    const more = data.truncated || data.rows.length > 5 ? " ..." : "";
+                    contentHtml += `<span class="sql-badge sql-result">Result (${data.rows.length} row${data.rows.length === 1 ? "" : "s"}): ${escapeHtml(shown || "no rows")}${more}</span>`;
+                }
             }
             if (data.data && data.data.forecast_next_hours) {
                 contentHtml += `<span class="sql-badge">Next Forecast: ${data.data.forecast_next_hours.join(", ")} visitors</span>`;

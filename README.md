@@ -15,7 +15,7 @@ First use downloads the YOLOv8s and Qwen weights (a few GB; CLIP only if you ena
 ## Run
 ```bash
 .venv/bin/uvicorn main:app --reload     # dashboard at http://127.0.0.1:8000
-.venv/bin/python -m unittest test_retailvision test_api test_counting test_security test_e2e test_features test_browser -v
+.venv/bin/python -m unittest test_retailvision test_api test_counting test_security test_e2e test_features test_analyst test_browser -v
 ```
 The SQLite database (`store_analytics.db`) is created automatically and is not tracked in git.
 Put sample videos in the project root; `*.mp4` and `*.avi` are git-ignored.

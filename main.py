@@ -97,7 +97,9 @@ def login(body: LoginIn):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "auth_required": bool(auth.configured_key())}
+    from retailvision import llm_analyst
+    return {"status": "ok", "auth_required": bool(auth.configured_key()),
+            "analyst_ready": llm_analyst.is_ready()}
 
 
 @app.get("/")

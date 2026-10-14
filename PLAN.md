@@ -263,3 +263,40 @@ What this shows and does not show
 - 164 "people tracked" in 2 minutes at the entrance is an overcount from ID fragmentation in the
   crowd; the real number of distinct people is probably well under 100. It remains an estimate.
 - Still unmeasured: precision/recall against a hand count of the whole clip.
+
+## 13. Analyst fix: "SQL is not being executed" (user report, 2026-10-14)
+
+Root causes found by reproducing against the live server and reading its log:
+1. **Failing SQL shown as executed.** Both dashboard suggestion chips made the small model invent
+   columns (`customer`; `zone` on `customer_traffic`), so SQLite returned "no such column". The
+   chat still printed "Executed SQL: ...", whenever any SQL existed.
+2. **Startup race.** The background model preload published the tokenizer before the model existed,
+   so a question arriving mid-load skipped loading and crashed with `KeyError('model')` (HTTP 500,
+   nothing shown). Reproduced: 5 of 6 concurrent first callers crashed under the old logic.
+3. **Silently wrong answers.** "How many people were tracked in total?" used `SUM(people_count)`
+   (1,336, which is people-seconds); "customers" produced `role = 'customer'`, which matches
+   nothing because role labelling is off.
+
+Changes
+- `sql_with_repair`: on a SQL error, tell the model the error and which table owns the missing
+  column, one retry; if a single-table query names a column that lives in exactly one other table,
+  switch the table deterministically (`direction` -> `crossings`).
+- `role` filters are dropped when attribute labelling is off (they can only return zero rows).
+- Prompt rules: people totals are `COUNT(*) FROM tracks`, never `SUM(people_count)`; zone traffic
+  means rows per zone in `tracks`; no `customer`/`traffic` columns.
+- Model loading is lock-guarded and publishes `ready` only when complete; `/health` reports
+  `analyst_ready`.
+- API returns `executed` and `attempts`; the chat shows "Executed SQL" only when it ran (with the
+  result rows), and "Not executed" with the query otherwise.
+
+Benchmark (`evaluation/llm_eval.py`, now 36 questions; 6 were added from this report)
+| | Strict | Lenient (extra columns ok) |
+|---|---|---|
+| Before | 23/36 (64%) | 27/36 (75%) |
+| After | 31/36 (86%) | 34/36 (94%) |
+
+Caveat: the 6 added questions drove some of the fixes (rules, role filter, table swap), so the
+number is optimistic for unseen wording. Remaining misses: "traffic records" resolved to `tracks`
+instead of `customer_traffic` (ambiguous wording) and a spurious zone filter on "passer-by" path
+length. 10 new unit tests (scripted LLM) and 1 browser test cover the repair path, the honest
+labels, and the concurrent-load race.
