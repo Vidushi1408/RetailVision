@@ -1,6 +1,7 @@
+import os
 import sqlite3
 
-DB_PATH = "store_analytics.db"
+DB_PATH = os.getenv("RETAILVISION_DB", "store_analytics.db")
 
 
 def connect():

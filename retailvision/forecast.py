@@ -28,17 +28,28 @@ class LSTMForecaster(nn.Module):
         return self.head(out[:, -1])
 
 
-def hourly_series():
+def hourly_buckets():
+    """[(datetime at the hour, mean people_count)] sorted by time; hours with no data are absent."""
     conn = connect()
     rows = conn.execute("SELECT timestamp, people_count FROM customer_traffic ORDER BY timestamp ASC").fetchall()
     conn.close()
     buckets = defaultdict(list)
     for r in rows:
         buckets[r["timestamp"][:13]].append(r["people_count"])  # YYYY-MM-DD HH
-    sorted_items = sorted(buckets.items())
-    series = [float(np.mean(v)) for _, v in sorted_items]
-    last_timestamp = sorted_items[-1][0] if sorted_items else None
-    return series, last_timestamp, len(rows)
+    out = []
+    for key, vals in sorted(buckets.items()):
+        try:
+            out.append((datetime.datetime.strptime(key, "%Y-%m-%d %H"), float(np.mean(vals))))
+        except ValueError:
+            continue
+    return out, len(rows)
+
+
+def hourly_series():
+    buckets, n_rows = hourly_buckets()
+    series = [v for _, v in buckets]
+    last_timestamp = buckets[-1][0].strftime("%Y-%m-%d %H") if buckets else None
+    return series, last_timestamp, n_rows
 
 
 def forecast(steps=6, epochs=200):
@@ -103,7 +114,20 @@ def forecast(steps=6, epochs=200):
     lstm_err = [abs(step(bt_model, list(z[:t])) - z[t]) for t in range(split, len(z))]
     naive_err = [abs(z[t - 1] - z[t]) for t in range(split, len(z))]
     lstm_mae, naive_mae = float(np.mean(lstm_err)) * sd, float(np.mean(naive_err)) * sd
-    use_lstm = lstm_mae < naive_mae
+
+    # "Same hour yesterday", looked up by real timestamp so gaps in the data cannot shift it.
+    buckets, _ = hourly_buckets()
+    by_time = {t: v for t, v in buckets}
+    one_day = datetime.timedelta(hours=24)
+    seas_err = [abs(by_time[t - one_day] - by_time[t])
+                for t, _ in buckets[split:] if (t - one_day) in by_time]
+    seasonal_mae = float(np.mean(seas_err)) if len(seas_err) >= 6 else None  # needs >= 6 comparable hours
+
+    scores = {"lstm": lstm_mae, "last_value": naive_mae}
+    if seasonal_mae is not None:
+        scores["seasonal"] = seasonal_mae
+    best = min(scores, key=scores.get)
+    use_lstm = best == "lstm"
 
     loss_val = _cached_forecaster["loss"]
     model = None
@@ -116,15 +140,27 @@ def forecast(steps=6, epochs=200):
             _cached_forecaster.update(model=model, data_count=row_count, loss=loss_val)
 
     window, preds = list(z[-WINDOW:]), []
-    for _ in range(steps):
-        p = step(model, window) if use_lstm else window[-1]
+    last_time = buckets[-1][0] if buckets else None
+    for i in range(steps):
+        if best == "seasonal" and last_time is not None:
+            target = last_time + datetime.timedelta(hours=i + 1)
+            past = by_time.get(target - one_day)
+            p = (past - mu) / sd if past is not None else window[-1]
+        else:
+            p = step(model, window) if use_lstm else window[-1]
         preds.append(p)
         window.append(p)
 
+    methods = {
+        "lstm": ("lstm_trained", "LSTM"),
+        "last_value": ("last_value_baseline", "last observed value (nothing else beat it in backtest)"),
+        "seasonal": ("seasonal_baseline", "same hour yesterday (beat the LSTM and last value in backtest)"),
+    }
+    status, method = methods[best]
     return {
-        "status": "lstm_trained" if use_lstm else "last_value_baseline",
-        "method": "LSTM" if use_lstm else "last observed value (LSTM did not beat it in backtest)",
-        "backtest_mae": {"lstm": round(lstm_mae, 2), "last_value": round(naive_mae, 2)},
+        "status": status,
+        "method": method,
+        "backtest_mae": {k: round(v, 2) for k, v in scores.items()},
         "train_loss": round(loss_val, 4),
         "history_points": len(series),
         "future_labels": future_labels,

@@ -15,7 +15,7 @@ First use downloads the YOLOv8s and Qwen weights (a few GB; CLIP only if you ena
 ## Run
 ```bash
 .venv/bin/uvicorn main:app --reload     # dashboard at http://127.0.0.1:8000
-.venv/bin/python -m unittest test_retailvision test_api test_counting test_security test_e2e test_features test_analyst test_browser -v
+.venv/bin/python -m unittest test_retailvision test_api test_counting test_security test_e2e test_features test_analyst test_classifier test_browser -v
 ```
 The SQLite database (`store_analytics.db`) is created automatically and is not tracked in git.
 Put sample videos in the project root; `*.mp4` and `*.avi` are git-ignored.
@@ -43,7 +43,8 @@ Then build `data/mall_counts.npy` from `mall_dataset/mall_gt.mat` (`count` array
 | Variable | Default | Meaning |
 |---|---|---|
 | `PRELOAD_MODELS` | `yolo,llm` | Models loaded at server start in a background thread. `none` disables (tests/CI). |
-| `ENABLE_CLIP_ATTRIBUTES` | `0` | `1` enables CLIP staff/customer + carrying labels. Off because they were not accurate on 640x480 CCTV. |
+| `ENABLE_CLIP_ATTRIBUTES` | `0` | `1` enables the **unvalidated** staff/customer label. |
+| `DISABLE_CARRYING` | `0` | `1` turns off the carried-bag check (it only runs when the upload asks for CLIP). |
 | `COUNT_LINES` | none | Fallback only: JSON `{"name": [x1,y1,x2,y2]}` in 0-1 frame coordinates. Lines saved in the dashboard take priority. |
 | `REVERSAL_WINDOW` | `3.0` | Seconds. A same-track crossing undone by the opposite crossing within this time is dropped as jitter (0 disables). |
 | `MAX_UPLOAD_MB` | `500` | Upload size limit (HTTP 413 above it). |
@@ -90,9 +91,13 @@ The accuracy checks below are separate because they need real data and models.
 ## Known limits (read before trusting a number)
 - **Occupancy** (people visible) is the most reliable number: about 14% error on public mall CCTV.
 - **People tracked** is an estimate and overcounts in crowds (ID fragmentation).
-- **Crossings** are only reported on a counting line you draw, and are best at a real doorway;
-  roughly 90% precision by eye on one entrance clip, recall not measured.
-- **Staff/customer and bag labels** are off: not accurate at CCTV resolution.
+- **Crossings** are only reported on a counting line you draw. Measured on one 2-minute entrance
+  clip against my hand labels of 102 candidates: **precision about 70%, recall about 71%**; the
+  reported total (57) was within ~10% of the ~52 distinct crossings, because the errors offset.
+  Single annotator, single clip: treat as indicative.
+- **Carrying a bag** is validated only for people at least 180 px tall (74% accuracy vs 51% baseline
+  on 53 crops, about +/-12 points) and is opt-in per upload. Smaller people are labelled `unknown`.
+- **Staff/customer** is not validated at any resolution and is off.
 - **The forecast** needs days of history; with less it shows a baseline and says so.
 - **The analyst** is a small local model: about 90% of unseen-wording questions in the benchmark.
   The chat shows the SQL and result rows so you can check, and marks failures "Not executed".

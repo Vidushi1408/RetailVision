@@ -3,6 +3,8 @@
 Usage: PYTHONPATH=. python evaluation/bag_eval.py   (needs data/labeling/crops, see README)
 """
 import csv
+import json
+import sys
 
 import cv2
 import numpy as np
@@ -43,10 +45,19 @@ def prf(pr, y):
 
 
 if __name__ == "__main__":
-    ids = [int(r[0]) for r in list(csv.reader(open("data/labeling/labels.csv")))[1:]]
-    idx = sorted(LABELS)
-    y = np.array([LABELS[i] for i in idx])
-    emb = image_emb([Image.fromarray(cv2.imread(f"data/labeling/crops/{ids[i]}.jpg")[:, :, ::-1]) for i in idx])
+    # default: the mall crops; or  --crops DIR --labels FILE.json  (crops named <n>.jpg, labels {n: 0|1|-1})
+    args = sys.argv[1:]
+    if "--crops" in args:
+        crops_dir = args[args.index("--crops") + 1]
+        lab = {int(k): v for k, v in json.load(open(args[args.index("--labels") + 1])).items() if v >= 0}
+        idx = sorted(lab)
+        y = np.array([lab[i] for i in idx])
+        emb = image_emb([Image.fromarray(cv2.imread(f"{crops_dir}/{i}.jpg")[:, :, ::-1]) for i in idx])
+    else:
+        ids = [int(r[0]) for r in list(csv.reader(open("data/labeling/labels.csv")))[1:]]
+        idx = sorted(LABELS)
+        y = np.array([LABELS[i] for i in idx])
+        emb = image_emb([Image.fromarray(cv2.imread(f"data/labeling/crops/{ids[i]}.jpg")[:, :, ::-1]) for i in idx])
     print(f"n={len(y)} bag={y.sum()} none={(1 - y).sum()}  majority-class accuracy={max(y.mean(), 1 - y.mean()):.2f}")
     prompts = {
         "A: current wording": (["a person carrying a bag", "a person carrying a shopping basket or cart"], ["a person carrying nothing"]),

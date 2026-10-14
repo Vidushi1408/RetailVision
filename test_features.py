@@ -15,7 +15,7 @@ _tmp = tempfile.mkdtemp()
 db.DB_PATH = os.path.join(_tmp, "features.db")
 os.environ["UPLOAD_DIR"] = os.path.join(_tmp, "uploads")
 import main  # noqa: E402
-from retailvision import privacy, tracker  # noqa: E402
+from retailvision import monitor, privacy, tracker  # noqa: E402
 from scripted_detector import EXPECTED, fresh_detector_factory, write_video  # noqa: E402
 
 
@@ -140,6 +140,93 @@ class TestStreams(Base):
             job = self.wait_job(r.json()["job_id"])
         self.assertEqual(job["status"], "error")
         self.assertIn("open stream", job["error"])
+
+
+class TestMonitor(Base):
+    def _wait(self, pred, timeout=60):
+        end = time.time() + timeout
+        while time.time() < end:
+            if pred():
+                return True
+            time.sleep(0.2)
+        return False
+
+    def test_rolling_windows_accumulate_then_stop(self):
+        env = {"STREAM_SOURCES": f'{{"loop": "{self.video}"}}'}
+        with mock.patch.dict(os.environ, env), mock.patch.object(tracker, "get_model", fresh_detector_factory()):
+            r = self.client.post("/monitor/start", params={"name": "loop", "window": 5, "camera": "lobby"})
+            self.assertEqual(r.status_code, 200, r.text)
+            # second start while running is refused
+            self.assertEqual(self.client.post("/monitor/start", params={"name": "loop"}).status_code, 409)
+            ok = self._wait(lambda: self.client.get("/monitor/").json()["monitors"]["loop"]["windows_done"] >= 2)
+            self.assertTrue(ok, self.client.get("/monitor/").text)
+            stopped = self.client.post("/monitor/stop", params={"name": "loop"}).json()
+        self.assertFalse(stopped["running"])
+        self.assertGreaterEqual(stopped["windows_done"], 2)
+        self.assertEqual(stopped["last_result"]["unique_people"], EXPECTED["unique_people"])
+        conn = db.connect()
+        rows = conn.execute("SELECT COUNT(*) FROM videos WHERE camera = 'lobby' AND filename = 'stream:loop'").fetchone()[0]
+        conn.close()
+        self.assertGreaterEqual(rows, 2)
+        self.assertIsNotNone(self.client.get("/monitor/").json()["server_rss_mb"])
+
+    def test_unknown_stream_and_unknown_stop(self):
+        with mock.patch.dict(os.environ, {"STREAM_SOURCES": ""}):
+            self.assertEqual(self.client.post("/monitor/start", params={"name": "nope"}).status_code, 404)
+        self.assertEqual(self.client.post("/monitor/stop", params={"name": "never-started"}).status_code, 404)
+
+    def test_dead_source_gives_up_after_repeated_errors(self):
+        env = {"STREAM_SOURCES": '{"dead": "/no/such/camera.mp4"}'}
+        with mock.patch.dict(os.environ, env), mock.patch.object(monitor, "MAX_CONSECUTIVE_ERRORS", 2), \
+                mock.patch.object(monitor, "ERROR_BACKOFF_SEC", 0.05):
+            self.assertEqual(self.client.post("/monitor/start", params={"name": "dead", "window": 5}).status_code, 200)
+            ok = self._wait(lambda: not self.client.get("/monitor/").json()["monitors"]["dead"]["running"])
+            st = self.client.get("/monitor/").json()["monitors"]["dead"]
+        self.assertTrue(ok)
+        self.assertGreaterEqual(st["errors"], 2)
+        self.assertEqual(st["windows_done"], 0)
+        self.assertIn("open stream", st["last_error"])
+
+
+class TestForecastMethods(Base):
+    """SYNTHETIC data only (clearly fabricated for testing the selection logic, not evidence
+    that any real store benefits)."""
+
+    def _seed(self, hours, fn, skip=lambda h: False):
+        conn = db.connect()
+        conn.execute("DELETE FROM customer_traffic")
+        start = datetime.datetime(2026, 1, 1)
+        for h in range(hours):
+            if skip(h):
+                continue
+            ts = (start + datetime.timedelta(hours=h)).strftime("%Y-%m-%d %H:%M:%S")
+            conn.execute("INSERT INTO customer_traffic (timestamp, people_count) VALUES (?,?)", (ts, fn(h)))
+        conn.commit()
+        conn.close()
+
+    def test_seasonal_wins_on_a_strict_daily_cycle(self):
+        import math
+        from retailvision.forecast import forecast
+        # exact 24 h cycle with a sharp shape the last value cannot track, no noise
+        self._seed(24 * 6, lambda h: round(30 + 25 * math.sin((h % 24) / 24 * 2 * math.pi)))
+        r = forecast(steps=6)
+        self.assertIn("seasonal", r["backtest_mae"])
+        self.assertEqual(min(r["backtest_mae"], key=r["backtest_mae"].get) in ("seasonal", "lstm"), True)
+        self.assertLessEqual(r["backtest_mae"]["seasonal"], r["backtest_mae"]["last_value"])
+        self.assertEqual(len(r["forecast_next_hours"]), 6)
+
+    def test_gaps_do_not_break_the_seasonal_lookup(self):
+        from retailvision.forecast import forecast
+        self._seed(24 * 5, lambda h: 10 + (h % 24), skip=lambda h: h % 7 == 0)  # a missing hour every 7
+        r = forecast(steps=4)
+        self.assertEqual(len(r["forecast_next_hours"]), 4)
+        self.assertTrue(all(v >= 0 for v in r["forecast_next_hours"]))
+
+    def test_too_little_data_has_no_seasonal_option(self):
+        from retailvision.forecast import forecast
+        self._seed(14, lambda h: 5 + h % 3)
+        r = forecast(steps=3)
+        self.assertNotIn("seasonal", r.get("backtest_mae", {}))
 
 
 class TestPrivacy(Base):

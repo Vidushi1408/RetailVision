@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <!-- Chart.js for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css?v=8">
+    <link rel="stylesheet" href="/static/style.css?v=9">
 </head>
 <body>
     <!-- App Container -->
@@ -149,7 +149,7 @@
                                     <label class="toggle-control" for="toggle-use-clip">
                                         <input type="checkbox" id="toggle-use-clip">
                                         <span class="toggle-slider"></span>
-                                        <span class="toggle-label">Try CLIP attributes (experimental, off by default: inaccurate on low-resolution CCTV)</span>
+                                        <span class="toggle-label">Detect carried bags with CLIP (about 74% accurate, only for people at least 180 px tall; slower, loads a 600 MB model)</span>
                                     </label>
                                 </div>
 
@@ -449,8 +449,8 @@
 
     <!-- Application Dashboard Logic -->
     <script src="/static/auth.js?v=6"></script>
-    <script src="/static/dashboard.js?v=8"></script>
-    <script src="/static/lines.js?v=8"></script>
+    <script src="/static/dashboard.js?v=9"></script>
+    <script src="/static/lines.js?v=9"></script>
     <script src="/static/extras.js?v=6"></script>
 </body>
 </html>

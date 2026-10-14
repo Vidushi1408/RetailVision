@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from retailvision import auth, jobs, privacy, streams
+from retailvision import auth, jobs, monitor, privacy, streams
 from retailvision.db import connect, init_db
 from retailvision.forecast import forecast
 from retailvision.pipeline import analyze
@@ -376,6 +376,31 @@ def analyze_stream(name: str, seconds: int = 30, camera: str = "default"):
     except jobs.QueueFull as e:
         raise HTTPException(429, str(e))
     return {"job_id": job_id, "status": "queued"}
+
+
+@app.post("/monitor/start")
+def monitor_start(name: str, window: int = 30, camera: str = "default"):
+    """Analyse a configured stream continuously in `window`-second chunks until stopped."""
+    if name not in streams.configured():
+        raise HTTPException(404, "Unknown stream. Configure it in STREAM_SOURCES.")
+    try:
+        monitor.start(name, window, _valid_camera(camera))
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+    return {"monitoring": name, "window_sec": window}
+
+
+@app.post("/monitor/stop")
+def monitor_stop(name: str):
+    try:
+        return {"stopped": name, **monitor.stop(name)}
+    except KeyError:
+        raise HTTPException(404, "That stream is not being monitored.")
+
+
+@app.get("/monitor/")
+def monitor_status():
+    return {"monitors": monitor.status(), "server_rss_mb": monitor.rss_mb()}
 
 
 @app.get("/ask/")

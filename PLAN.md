@@ -253,8 +253,8 @@ How it was checked (no hand-labelled ground truth exists for these clips):
 - **Fix:** cancel a same-track reversal within `REVERSAL_WINDOW` (default 3 s). Entrance count went
   87 -> 57 (41 in / 16 out), in line with ~50-57 distinct crossings seen in the crops. Variants tried
   offline on the same tracks: feet-point reference was worse (121 events), margin 0.05 gave 51.
-  Visual review of the retained events: mostly distinct people; a few duplicates remain (the same
-  person under two IDs), so treat 57 as an upper estimate (roughly 90% precision by eye).
+  First impression after a quick look: "mostly distinct people". CORRECTION: a careful event-by-event
+  labelling (section 15) measured precision at about 70%, not the ~90% first guessed here.
 
 What this shows and does not show
 - Crossing counting needs a camera that actually looks at a door: the default mid-frame line on the
