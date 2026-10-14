@@ -15,7 +15,7 @@ First use downloads the YOLOv8s and Qwen weights (a few GB; CLIP only if you ena
 ## Run
 ```bash
 .venv/bin/uvicorn main:app --reload     # dashboard at http://127.0.0.1:8000
-.venv/bin/python -m unittest test_retailvision test_api test_counting test_security -v
+.venv/bin/python -m unittest test_retailvision test_api test_counting test_security test_e2e -v
 ```
 The SQLite database (`store_analytics.db`) is created automatically and is not tracked in git.
 Put sample videos in the project root; `*.mp4` and `*.avi` are git-ignored.
@@ -67,6 +67,11 @@ Then build `data/mall_counts.npy` from `mall_dataset/mall_gt.mat` (`count` array
   HttpOnly and SameSite=Strict but only `Secure` if you add HTTPS in front; rate limits live in
   process memory (reset on restart).
 - Accepted video types: mp4, avi, mov, mkv, webm.
+
+## Tests
+`test_e2e.py` runs upload -> background job -> tracking -> crossings -> database -> API -> analyst
+answer with a scripted detector and a scripted LLM, so it needs no weights and is deterministic.
+The accuracy checks below are separate because they need real data and models.
 
 ## Accuracy checks (need `data/`, see above)
 ```bash
