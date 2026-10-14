@@ -108,11 +108,16 @@ async function loadTrafficAndForecast() {
                     badge.style.background = "rgba(16, 185, 129, 0.15)";
                     badge.style.color = "#34d399";
                     if (meta) meta.textContent = `Trained model loss: ${currentForecastData.train_loss}`;
+                } else if (currentForecastData.status === "no_data") {
+                    badge.textContent = "No data yet";
+                    badge.style.background = "rgba(100, 116, 139, 0.15)";
+                    badge.style.color = "#94a3b8";
+                    if (meta) meta.textContent = "Analyse a video to start collecting history";
                 } else {
-                    badge.textContent = "Trend Extrapolation";
+                    badge.textContent = "Flat average";
                     badge.style.background = "rgba(245, 158, 11, 0.15)";
                     badge.style.color = "#fbbf24";
-                    if (meta) meta.textContent = "Awaiting 9+ hours for full LSTM curve";
+                    if (meta) meta.textContent = "Awaiting 9+ hours of history for a learned forecast";
                 }
             }
         }

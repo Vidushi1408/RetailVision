@@ -70,17 +70,24 @@ def forecast(steps=6, epochs=200):
         for i in range(steps)
     ]
 
-    # Graceful fallback if insufficient hourly points
+    # No fabricated numbers: with no data there is no forecast, and with too little history for the
+    # LSTM the honest baseline is simply the average observed so far, repeated (flat).
+    if not series:
+        return {
+            "status": "no_data",
+            "message": "No traffic data yet: analyse a video or start a camera monitor first.",
+            "history_points": 0,
+            "future_labels": [],
+            "forecast_next_hours": [],
+        }
     if len(series) < WINDOW + 3:
-        avg_traffic = float(np.mean(series)) if series else 5.0
-        # Light variance based on typical retail curve
-        baseline_preds = [float(round(max(avg_traffic * (1 + 0.1 * float(np.sin(i))), 1.0), 1)) for i in range(steps)]
+        avg_traffic = round(float(np.mean(series)), 1)
         return {
             "status": "baseline_extrapolation",
-            "message": f"Need at least {WINDOW + 3} hourly data points for deep LSTM; showing trend baseline.",
+            "message": f"Need at least {WINDOW + 3} hourly data points for the LSTM; showing the flat average so far.",
             "history_points": len(series),
             "future_labels": future_labels,
-            "forecast_next_hours": baseline_preds
+            "forecast_next_hours": [avg_traffic] * steps,
         }
 
 

@@ -385,3 +385,9 @@ collector: a camera left on accumulates the hourly series the forecaster needs.
 ### Still not done
 Forecast benefit on real data (needs days of footage); staff/customer; frame-by-frame real-time
 streaming (the monitor is near-continuous, with gaps while a window is analysed).
+
+## 16. Forecast fallback no longer fabricates numbers
+Found while writing the technical explanation: with fewer than 9 hourly points the forecaster
+returned the average with a sine-shaped wiggle, and with no data at all a default of 5 visitors.
+Both were invented. Now: no data returns `no_data` and an empty forecast (the dashboard badge says
+"No data yet"); too little history returns the flat average so far. Tests use isolated databases.

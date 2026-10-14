@@ -188,8 +188,10 @@ internet (see section 9).
 - **Measured:** on 17 minutes of mall data the LSTM only tied "last value", which is expected
   (no daily pattern in 17 minutes). On a clearly **synthetic** 14-day cycle it won, which shows
   the selection logic works, not that any real store benefits.
-- **Fallback:** with fewer than 9 hourly points it returns the average with a small sine-shaped
-  wiggle and labels it `baseline_extrapolation`. The wiggle is cosmetic and should be flat.
+- **Fallback:** with no data it returns *no forecast* (`no_data`); with fewer than 9 hourly points
+  it returns the average observed so far, repeated flat, labelled `baseline_extrapolation`. An
+  earlier version added a small sine wiggle and a default of 5 visitors; both were fabricated
+  and have been removed.
 
 ### 3.10 Local language model + SQL guard: the analyst
 - **Where:** `retailvision/llm_analyst.py` and `retailvision/sqlguard.py`; endpoint `/ask/`.
@@ -321,8 +323,8 @@ the language model loads.
 - **Crossings** need a camera that faces a door and a line you draw; no line means no crossing
   numbers by design.
 - **Staff versus customer** is not validated at any resolution.
-- **The forecast** needs days of data; under 9 hours it shows a flat-ish baseline with a cosmetic
-  wiggle.
+- **The forecast** needs days of data; under 9 hours it shows the flat average so far, and with
+  no data it shows nothing.
 - **KMeans names** are relative per video.
 - **Zones** are grid cells of the camera view, not store areas.
 - **Single machine, single worker:** jobs run one at a time.
