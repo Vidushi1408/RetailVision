@@ -52,7 +52,7 @@ clip for occupancy. State clearly that the store-specific claim is then unproven
 | E1 | Automated end-to-end test on a 20 s fixture clip (upload, job, summary, crossings, analyst answer). | Runs in CI |
 | E2 | Add `count_eval` and the 30-question analyst benchmark as scheduled/optional CI jobs with thresholds (MAE < 6, SQL ≥ 80%). | Regressions fail the build |
 | E3 | Browser test of the dashboard flow (Playwright). | Upload and results asserted |
-| E4 | Repo tidy: delete merged branches, `git rm --cached yolov8n.pt`, pin Python version in CI, tag `v1.0`. | Clean tree, release tag |
+| E4 | Repo tidy: delete merged branches, `git rm --cached yolov8n.pt`, pin Python version in CI, tag `v1.0`. **Done** except the tag: merged branches deleted, weights untracked, `.python-version` + CI weight cache. Tag `v1.0` waits for Phase A/B validation so the version number does not overstate what is proven. | Clean tree, release tag |
 | E5 | Rehearse the presentation with the real app; update the deck numbers from Phase B/C. | One timed run-through; deck matches `PLAN.md` |
 
 ## Suggested split for five people

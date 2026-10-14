@@ -10,7 +10,7 @@ questions in plain English over the stored data.
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
-First use downloads YOLOv8n, CLIP and Qwen weights (a few GB) once; afterwards it runs offline.
+First use downloads the YOLOv8s and Qwen weights (a few GB; CLIP only if you enable attributes) once; afterwards it runs offline. Weights are not stored in git. Python 3.14 is pinned in `.python-version`.
 
 ## Run
 ```bash
