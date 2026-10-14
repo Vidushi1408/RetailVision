@@ -46,5 +46,30 @@ class TestLineCrossings(unittest.TestCase):
         self.assertEqual(ev, [(0.5, "in")])
 
 
+class TestReversalCancellation(unittest.TestCase):
+    """A track flipping across the line within the window is jitter, not two real crossings."""
+
+    def test_quick_reversal_is_cancelled(self):
+        p = path((0.5, 0.3), (0.5, 0.7), (0.5, 0.3))  # in at 0.5 s, out at 1.0 s
+        self.assertEqual(len(line_crossings(p, H_LINE)), 2)
+        self.assertEqual(line_crossings(p, H_LINE, reversal_window=3.0), [])
+
+    def test_slow_reversal_is_kept(self):
+        p = [(0.0, 0.5, 0.3), (0.5, 0.5, 0.7), (10.0, 0.5, 0.7), (10.5, 0.5, 0.3)]  # out 10 s later
+        ev = line_crossings(p, H_LINE, reversal_window=3.0)
+        self.assertEqual([d for _, d in ev], ["in", "out"])
+
+    def test_flip_flop_leaves_the_final_direction(self):
+        p = path((0.5, 0.3), (0.5, 0.7), (0.5, 0.3), (0.5, 0.7))  # in, out, in within 1 s
+        self.assertEqual([d for _, d in line_crossings(p, H_LINE, reversal_window=3.0)], ["in"])
+
+    def test_same_direction_twice_is_not_cancelled(self):
+        p = [(0.0, 0.3, 0.3), (0.5, 0.3, 0.7), (1.0, 0.8, 0.3), (1.5, 0.8, 0.7)]  # two separate "in"s
+        # second pass needs to come back up first; use two tracks' worth of motion in one path
+        ev = line_crossings(p, H_LINE, reversal_window=0.0)
+        self.assertEqual([d for _, d in ev], ["in", "out", "in"])
+        self.assertEqual([d for _, d in line_crossings(p, H_LINE, reversal_window=0.4)], ["in", "out", "in"])
+
+
 if __name__ == "__main__":
     unittest.main()

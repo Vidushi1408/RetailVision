@@ -45,6 +45,7 @@ Then build `data/mall_counts.npy` from `mall_dataset/mall_gt.mat` (`count` array
 | `PRELOAD_MODELS` | `yolo,llm` | Models loaded at server start in a background thread. `none` disables (tests/CI). |
 | `ENABLE_CLIP_ATTRIBUTES` | `0` | `1` enables CLIP staff/customer + carrying labels. Off because they were not accurate on 640x480 CCTV. |
 | `COUNT_LINES` | one horizontal mid-frame line | Fallback only: JSON `{"name": [x1,y1,x2,y2]}` in 0-1 frame coordinates. Lines saved in the dashboard take priority. |
+| `REVERSAL_WINDOW` | `3.0` | Seconds. A same-track crossing undone by the opposite crossing within this time is dropped as jitter (0 disables). |
 | `MAX_UPLOAD_MB` | `500` | Upload size limit (HTTP 413 above it). |
 | `RETENTION_DAYS` | `0` (keep) | If > 0, analytics older than this are deleted at server start. Also available as `POST /privacy/purge?days=N`. |
 | `STREAM_SOURCES` | empty | JSON `{"name": "rtsp://... or /path/file.mp4"}`. Names appear in the dashboard's Camera Streams card; URLs are never sent to the browser. |
@@ -84,6 +85,11 @@ answer with a scripted detector and a scripted LLM, so it needs no weights and i
 `test_browser.py` drives the dashboard in Chromium (Playwright; install with
 `pip install -r requirements-dev.txt && python -m playwright install chromium`; skipped if absent).
 The accuracy checks below are separate because they need real data and models.
+
+## Checking crossings by eye
+`PYTHONPATH=. python scripts/review_crossings.py clip.mp4 out_dir 0.05,0.55,0.95,0.55` saves a
+contact sheet with one crop per counted crossing (direction, time, track id) so a person can
+verify precision and spot the same person counted twice.
 
 ## Accuracy checks (need `data/`, see above)
 ```bash

@@ -231,3 +231,35 @@ created per video.
   horizontal line gave 111 in / 66 out; treat as unverified until counted by hand on a clip.
 - Text-to-SQL re-check after adding the `crossings` table to the schema prompt: 28/30 lenient.
 - Known limit: a person whose track ID breaks exactly at the line is missed (undercount).
+
+## 12. Real store footage: two supplied videos (2026-10-14)
+
+Two phone-forwarded CCTV clips, both H.264, run through the live app (YOLOv8s, 1280 px, conf 0.15).
+
+| Clip | Scene | Length / fps / size | People tracked (est.) | Occupancy mean / peak | Crossings in / out |
+|---|---|---|---|---|---|
+| 13.48.04 | Pharmacy interior, high angle, counter + aisles | 110.9 s, 13.1, 634x360 | 39 | 12.0 / 16 | 9 / 9 (default mid-frame line, **not meaningful**: no door in view) |
+| 13.52.34 | Store entrance, automatic doors, people walk toward the camera | 121.0 s, 6.0, 480x360 | 164 | 8.9 / 16 | 41 / 16 on a line at the doorway |
+
+How it was checked (no hand-labelled ground truth exists for these clips):
+- **Occupancy:** detections overlaid on 8 sampled frames and compared with what is visible. Boxes
+  sit on the visible people, including partly hidden ones. Caveats: people seen *through the glass
+  doors* and staff at the counter are counted; groups standing close together are sometimes one box.
+- **Crossings:** every counted crossing was cropped and reviewed by eye (`scripts/review_crossings.py`).
+  Directions matched what the footage shows (backs to the camera = out, faces = in).
+- **Defect found:** 87 raw entrance crossings, but 18 of them were a track flipping across the line
+  within 3 s (box jitter in the crowd at the door, merged group boxes, ID switches). One person
+  could produce in-out-in within a second.
+- **Fix:** cancel a same-track reversal within `REVERSAL_WINDOW` (default 3 s). Entrance count went
+  87 -> 57 (41 in / 16 out), in line with ~50-57 distinct crossings seen in the crops. Variants tried
+  offline on the same tracks: feet-point reference was worse (121 events), margin 0.05 gave 51.
+  Visual review of the retained events: mostly distinct people; a few duplicates remain (the same
+  person under two IDs), so treat 57 as an upper estimate (roughly 90% precision by eye).
+
+What this shows and does not show
+- Crossing counting needs a camera that actually looks at a door: the default mid-frame line on the
+  pharmacy clip produced 9 in / 9 out that mean nothing. The analyst answered "50 entered, 25 left"
+  by summing both clips, which is arithmetically right and practically misleading.
+- 164 "people tracked" in 2 minutes at the entrance is an overcount from ID fragmentation in the
+  crowd; the real number of distinct people is probably well under 100. It remains an estimate.
+- Still unmeasured: precision/recall against a hand count of the whole clip.

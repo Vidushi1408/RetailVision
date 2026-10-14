@@ -94,7 +94,10 @@ def merge_fragments(tracks, max_gap=4.0, max_dist=0.12, feats=None,
     return merged, parent
 
 
-def line_crossings(points, line, margin=0.02):
+REVERSAL_WINDOW = float(os.getenv("REVERSAL_WINDOW", "3.0"))  # seconds; 0 disables
+
+
+def line_crossings(points, line, margin=0.02, reversal_window=0.0):
     """Directed crossings of one segment by one track.
 
     line = (ax, ay, bx, by) in normalised frame coordinates. "in" means moving from the left-hand
@@ -102,6 +105,10 @@ def line_crossings(points, line, margin=0.02):
     A crossing is counted only when the track moves from beyond `margin` on one side to beyond
     `margin` on the other, so jitter around the line is not counted, and only when the crossing
     point lies within the segment (walking around its end does not count).
+    With `reversal_window` > 0, a crossing that is undone by the opposite crossing within that many
+    seconds is dropped together with its partner: on real doorway footage 18 of 87 events were a
+    track flipping back and forth (box jitter, merged group boxes, ID switches), and nobody
+    genuinely crosses a line twice in three seconds.
     Returns [(sec, "in"|"out"), ...].
     """
     ax, ay, bx, by = line
@@ -121,6 +128,14 @@ def line_crossings(points, line, margin=0.02):
             if -0.05 <= u <= 1.05:
                 events.append((sec, "in" if new == "pos" else "out"))
         state = new
+    if reversal_window > 0:
+        kept = []
+        for sec, d in events:
+            if kept and kept[-1][1] != d and sec - kept[-1][0] <= reversal_window:
+                kept.pop()
+            else:
+                kept.append((sec, d))
+        events = kept
     return events
 
 
@@ -193,7 +208,7 @@ def track_video(path, model_path="yolov8s.pt", stride=None, imgsz=1280, conf=0.1
     cap.release()
     raw_ids = len(tracks)
     # Count crossings on RAW tracks: merged tracks may chain different people.
-    crossings = {name: sorted(e for t in tracks.values() for e in line_crossings(t["points"], ln))
+    crossings = {name: sorted(e for t in tracks.values() for e in line_crossings(t["points"], ln, reversal_window=REVERSAL_WINDOW))
                  for name, ln in (lines or {}).items()}
     feats = None
     if use_appearance:
