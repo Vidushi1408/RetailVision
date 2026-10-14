@@ -99,6 +99,16 @@ class TestDashboardInBrowser(unittest.TestCase):
         self.assertEqual(self.errors, [])
 
     def test_2_upload_shows_known_results(self):
+        # crossings need a saved line; the dashboard says so when there is none
+        self.page.goto(self.base)
+        self.page.set_input_files("#video-file-input", self.video)
+        self.page.click("#start-analysis-btn")
+        expect(self.page.locator("#progress-status-text")).to_have_text("Complete!", timeout=60000)
+        expect(self.page.locator("#summary-crossings")).to_have_text("No line set")
+        expect(self.page.locator("#summary-unique-people")).to_have_text(str(EXPECTED["unique_people"]))
+
+        requests.put(self.base + "/lines/", json={"name": "e3-door", "x1": 0.0, "y1": 0.5, "x2": 1.0, "y2": 0.5}
+                     ).raise_for_status()
         self.page.goto(self.base)
         expect(self.page.locator("#toggle-use-clip")).not_to_be_checked()  # CLIP off by default
         self.page.set_input_files("#video-file-input", self.video)

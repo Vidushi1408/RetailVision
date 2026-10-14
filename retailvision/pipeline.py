@@ -8,14 +8,13 @@ from .db import connect
 from .tracker import track_features, track_video
 
 
-DEFAULT_LINES = {"entrance": [0.0, 0.5, 1.0, 0.5]}
-
-
 def count_lines(camera="default"):
     """Counting lines as {"name": [ax, ay, bx, by]} in normalised frame coordinates (0-1).
 
     Priority: lines saved from the dashboard for this camera, then the COUNT_LINES env var
-    (JSON), then one horizontal line across the middle of the frame.
+    (JSON). With neither, there are NO lines and no crossings are reported: an arbitrary
+    mid-frame line gives numbers that look real but mean nothing unless the camera happens to
+    face an entrance (on a pharmacy interior it produced "9 in / 9 out").
     """
     conn = connect()
     try:
@@ -27,7 +26,7 @@ def count_lines(camera="default"):
     if saved:
         return saved
     raw = os.getenv("COUNT_LINES")
-    return json.loads(raw) if raw else dict(DEFAULT_LINES)
+    return json.loads(raw) if raw else {}
 
 
 def analyze(path, filename, use_clip=True, camera="default"):

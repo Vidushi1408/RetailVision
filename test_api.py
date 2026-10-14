@@ -128,7 +128,7 @@ class TestAPI(unittest.TestCase):
     def test_analysis_uses_saved_lines(self):
         from retailvision.pipeline import count_lines
         self._clear_lines()
-        self.assertIn("entrance", count_lines())  # default when nothing saved
+        self.assertEqual(count_lines(), {})  # nothing saved -> nothing counted (no arbitrary default)
         client.put("/lines/", json={"name": "till queue", "x1": 0.3, "y1": 0.2, "x2": 0.3, "y2": 0.9})
         self.assertEqual(list(count_lines()), ["till queue"])
         r = self._post(use_clip=False)

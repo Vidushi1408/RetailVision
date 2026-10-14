@@ -39,6 +39,8 @@ class TestEndToEnd(unittest.TestCase):
         main.UPLOAD_DIR = os.path.join(tempfile.mkdtemp(), "uploads")
         db.init_db()
         cls.client = TestClient(main.app)
+        # crossings are only counted on a saved line: a horizontal line across the middle
+        cls.client.put("/lines/", json={"name": "entrance", "x1": 0.0, "y1": 0.5, "x2": 1.0, "y2": 0.5})
         cls.video = os.path.join(_tmp, "scripted.mp4")
         write_video(cls.video)
 

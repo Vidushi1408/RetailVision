@@ -69,6 +69,46 @@ class TestAnalyst(unittest.TestCase):
             r = la.sql_with_repair("how many customers?")
         self.assertEqual(r["rows"], [{"COUNT(*)": 5}])
 
+    def test_invented_zone_literal_is_dropped_but_a_requested_zone_is_kept(self):
+        f = la.drop_hallucinated_zone_filter
+        self.assertEqual(f("SELECT AVG(path_length) FROM tracks WHERE zone = 'r0c0'", "average path length of passers-by"),
+                         "SELECT AVG(path_length) FROM tracks")
+        self.assertEqual(f("SELECT COUNT(*) FROM tracks WHERE segment = 'browser' AND zone = 'r1c2'",
+                           "how many browsers are there"),
+                         "SELECT COUNT(*) FROM tracks WHERE segment = 'browser'")
+        self.assertEqual(f("SELECT COUNT(*) FROM tracks WHERE zone IN ('r0c0', 'r0c1')", "how many people were seen"),
+                         "SELECT COUNT(*) FROM tracks")
+        kept = "SELECT COUNT(*) FROM tracks WHERE zone = 'r1c1'"
+        self.assertEqual(f(kept, "how many people were in zone r1c1?"), kept)
+        self.assertEqual(f(kept, "How many people were in R1C1"), kept)  # case-insensitive
+
+    def test_named_segment_is_enforced_only_when_unambiguous(self):
+        f = la.ensure_segment_filter
+        self.assertEqual(f("SELECT AVG(path_length) FROM tracks", "average path length of passer-by"),
+                         "SELECT AVG(path_length) FROM tracks WHERE segment = 'passer-by'")
+        self.assertEqual(f("SELECT COUNT(*) FROM tracks WHERE zone = 'r1c1'", "how many browsers were in zone r1c1"),
+                         "SELECT COUNT(*) FROM tracks WHERE segment = 'browser' AND zone = 'r1c1'")
+        self.assertEqual(f("SELECT AVG(dwell_sec) FROM tracks", "average dwell of engaged shoppers"),
+                         "SELECT AVG(dwell_sec) FROM tracks WHERE segment = 'engaged-shopper'")
+        same = "SELECT segment, COUNT(*) FROM tracks GROUP BY segment"
+        self.assertEqual(f(same, "how many passers-by versus browsers"), same)       # two groups: leave alone
+        q = "SELECT COUNT(*) FROM tracks WHERE segment = 'browser'"
+        self.assertEqual(f(q, "how many browsers"), q)                                # already filtered
+        c = "SELECT COUNT(*) FROM crossings"
+        self.assertEqual(f(c, "how many browsers crossed"), c)                        # not a tracks query
+
+    def test_impossible_enum_literals_are_dropped_possible_ones_kept(self):
+        f = la.drop_impossible_enum_filters
+        self.assertEqual(f("SELECT AVG(dwell_sec) FROM tracks WHERE segment = 'shoppers'"),
+                         "SELECT AVG(dwell_sec) FROM tracks")
+        self.assertEqual(f("SELECT COUNT(*) FROM tracks WHERE segment = 'visitors' AND zone = 'r0c0'"),
+                         "SELECT COUNT(*) FROM tracks WHERE zone = 'r0c0'")
+        self.assertEqual(f("SELECT COUNT(*) FROM crossings WHERE direction = 'entered'"),
+                         "SELECT COUNT(*) FROM crossings")
+        ok = "SELECT COUNT(*) FROM tracks WHERE segment = 'engaged-shopper' AND zone = 'r0c0'"
+        self.assertEqual(f(ok), ok)
+        self.assertEqual(f("SELECT 1 FROM tracks WHERE SEGMENT = 'Browser'"), "SELECT 1 FROM tracks WHERE SEGMENT = 'Browser'")
+
     def test_unfixable_query_reports_not_executed(self):
         gen = scripted("SELECT nonsense FROM tracks", "SELECT nonsense FROM tracks")
         with mock.patch.object(la, "_generate", gen):

@@ -44,7 +44,7 @@ Then build `data/mall_counts.npy` from `mall_dataset/mall_gt.mat` (`count` array
 |---|---|---|
 | `PRELOAD_MODELS` | `yolo,llm` | Models loaded at server start in a background thread. `none` disables (tests/CI). |
 | `ENABLE_CLIP_ATTRIBUTES` | `0` | `1` enables CLIP staff/customer + carrying labels. Off because they were not accurate on 640x480 CCTV. |
-| `COUNT_LINES` | one horizontal mid-frame line | Fallback only: JSON `{"name": [x1,y1,x2,y2]}` in 0-1 frame coordinates. Lines saved in the dashboard take priority. |
+| `COUNT_LINES` | none | Fallback only: JSON `{"name": [x1,y1,x2,y2]}` in 0-1 frame coordinates. Lines saved in the dashboard take priority. |
 | `REVERSAL_WINDOW` | `3.0` | Seconds. A same-track crossing undone by the opposite crossing within this time is dropped as jitter (0 disables). |
 | `MAX_UPLOAD_MB` | `500` | Upload size limit (HTTP 413 above it). |
 | `RETENTION_DAYS` | `0` (keep) | If > 0, analytics older than this are deleted at server start. Also available as `POST /privacy/purge?days=N`. |
@@ -70,7 +70,8 @@ Then build `data/mall_counts.npy` from `mall_dataset/mall_gt.mat` (`count` array
   HttpOnly and SameSite=Strict but only `Secure` if you add HTTPS in front; rate limits live in
   process memory (reset on restart).
 - Cameras: `camera` (letters, digits, space, `_`, `-`) on uploads and on counting lines groups lines
-  per camera; an analysis for camera X uses only X's lines, falling back to the default line.
+  per camera; an analysis for camera X uses only X's lines. A camera with no saved line reports
+  no crossings (draw one in the dashboard); occupancy and dwell are still reported.
 - Streams: `GET /streams/` lists configured names; `POST /analyze_stream/?name=&seconds=&camera=`
   records up to 300 s from a configured source and analyses it as a background job (near-live,
   not frame-by-frame real time).
@@ -85,6 +86,16 @@ answer with a scripted detector and a scripted LLM, so it needs no weights and i
 `test_browser.py` drives the dashboard in Chromium (Playwright; install with
 `pip install -r requirements-dev.txt && python -m playwright install chromium`; skipped if absent).
 The accuracy checks below are separate because they need real data and models.
+
+## Known limits (read before trusting a number)
+- **Occupancy** (people visible) is the most reliable number: about 14% error on public mall CCTV.
+- **People tracked** is an estimate and overcounts in crowds (ID fragmentation).
+- **Crossings** are only reported on a counting line you draw, and are best at a real doorway;
+  roughly 90% precision by eye on one entrance clip, recall not measured.
+- **Staff/customer and bag labels** are off: not accurate at CCTV resolution.
+- **The forecast** needs days of history; with less it shows a baseline and says so.
+- **The analyst** is a small local model: about 90% of unseen-wording questions in the benchmark.
+  The chat shows the SQL and result rows so you can check, and marks failures "Not executed".
 
 ## Checking crossings by eye
 `PYTHONPATH=. python scripts/review_crossings.py clip.mp4 out_dir 0.05,0.55,0.95,0.55` saves a

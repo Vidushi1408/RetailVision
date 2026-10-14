@@ -171,7 +171,7 @@
         if (!saved.length) {
             const li = document.createElement("li");
             li.className = "saved-empty";
-            li.textContent = "No saved lines: analyses use one horizontal line across the middle.";
+            li.textContent = "No counting lines saved: entrances are not counted until you draw one.";
             listEl.appendChild(li);
         }
         saved.forEach(l => {

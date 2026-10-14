@@ -300,3 +300,33 @@ number is optimistic for unseen wording. Remaining misses: "traffic records" res
 instead of `customer_traffic` (ambiguous wording) and a spurious zone filter on "passer-by" path
 length. 10 new unit tests (scripted LLM) and 1 browser test cover the repair path, the honest
 labels, and the concurrent-load race.
+
+## 14. Local completion pass (2026-10-14)
+
+Closed the items that did not need new footage.
+
+- **No arbitrary default line.** A camera with no saved counting line now reports no crossings
+  (summary shows "No line set"); occupancy, dwell and people are still reported. Reason: the old
+  mid-frame default produced "9 in / 9 out" on the pharmacy interior, which is meaningless but
+  looked real, and the analyst then summed it with the real doorway counts.
+- **Analyst guards** (all deterministic, each with unit tests): drop role filters when labelling is
+  off; drop zone literals the question never mentions; add the behaviour-group filter when the
+  question names exactly one group and the query ignores it; drop predicates on impossible enum
+  values (`segment = 'shoppers'`); switch a single-table query to the table that owns a missing
+  column; one error-aware model retry.
+- **Benchmark honesty.** Two sets in `evaluation/llm_eval.py`:
+
+| Set | Questions | Strict | Lenient | Note |
+|---|---|---|---|---|
+| Tuned (prompt and guards were fitted to these) | 36 | 33 (92%) | 36 (100%) | optimistic |
+| Held-out, first run, before the enum guard | 12 | 9 (75%) | 11 (92%) | the unbiased estimate |
+| Held-out, after the enum guard | 12 | 10 (83%) | 12 (100%) | no longer fully held out |
+
+  Expect roughly 90% lenient on new wording from a 1.5B model, not 100%. The remaining strict
+  misses return an extra column (zone plus its count when only the zone was asked), which is a
+  correct answer in a different shape.
+- **Tests: 72**, in 8 modules, all passing locally in several module orders.
+
+Known limits that remain (unchanged, need data or hardware): unique-visitor accuracy, crossing
+recall against a full hand count, staff/customer and bag labels, forecast benefit, continuous
+live streaming, `v1.0` tag.

@@ -90,10 +90,12 @@ class TestCameras(Base):
         self.assertEqual(body["camera"], "door")
         self.assertEqual(list(body["crossings"]), ["door-line"])
 
-        # a different camera does not see the door's lines: falls back to the default line
+        # a different camera does not see the door's lines, and there is no arbitrary default:
+        # it reports no crossings but still reports people and occupancy
         other = self.upload(camera="till", use_clip=False).json()
-        self.assertEqual(list(other["crossings"]), ["entrance"])
-        self.assertEqual(other["crossings"]["entrance"], {"in": EXPECTED["in"], "out": EXPECTED["out"]})
+        self.assertEqual(other["crossings"], {})
+        self.assertEqual(other["unique_people"], EXPECTED["unique_people"])
+        self.assertEqual(other["occupancy"]["peak"], EXPECTED["occupancy_peak"])
 
         conn = db.connect()
         cams = [r["camera"] for r in conn.execute("SELECT camera FROM videos ORDER BY id")]
@@ -118,6 +120,8 @@ class TestStreams(Base):
             self.assertEqual(self.client.post("/analyze_stream/", params={"name": "door", "seconds": 9999}).status_code, 422)
 
     def test_stream_is_recorded_then_analysed(self):
+        self.client.put("/lines/", json={"name": "entrance", "camera": "front",
+                                         "x1": 0.0, "y1": 0.5, "x2": 1.0, "y2": 0.5})
         with mock.patch.dict(os.environ, {"STREAM_SOURCES": f'{{"entrance-cam": "{self.video}"}}'}), \
                 mock.patch.object(tracker, "get_model", fresh_detector_factory()):
             r = self.client.post("/analyze_stream/", params={"name": "entrance-cam", "seconds": 10,

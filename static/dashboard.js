@@ -419,7 +419,7 @@ function initVideoUpload() {
             document.getElementById("summary-occupancy").textContent = `${occ.mean ?? "--"} / ${occ.peak ?? "--"}`;
             const cross = Object.values(result.crossings || {});
             const cin = cross.reduce((a, c) => a + c.in, 0), cout = cross.reduce((a, c) => a + c.out, 0);
-            document.getElementById("summary-crossings").textContent = cross.length ? `${cin} / ${cout}` : "--";
+            document.getElementById("summary-crossings").textContent = cross.length ? `${cin} / ${cout}` : "No line set";
             document.getElementById("summary-dwell").textContent = `${result.avg_dwell_sec || 0}s`;
 
             const pillList = document.getElementById("summary-segment-pills");

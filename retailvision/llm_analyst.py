@@ -42,6 +42,8 @@ Rules:
 - Customers, shoppers, visitors, people seen or tracked all mean rows of `tracks`: count them
   with COUNT(*) FROM tracks. `people_count` is how many people were visible at one moment, so
   use MAX or AVG on it and never SUM it to count people.
+- "Traffic records", "readings", "entries" or "measurements" count rows of `customer_traffic`
+  (one row per second of video), not people.
 - "Busiest zone", "most visited area" or "zone traffic" mean the zone with the most rows in
   `tracks`: GROUP BY zone ORDER BY COUNT(*) DESC.
 
@@ -56,6 +58,8 @@ Q: What was the highest number of people present at once?
 SQL: SELECT MAX(people_count) FROM customer_traffic
 Q: How many shoppers are engaged compared with passers-by?
 SQL: SELECT segment, COUNT(*) FROM tracks WHERE segment IN ('engaged-shopper','passer-by') GROUP BY segment
+Q: How many occupancy readings are stored?
+SQL: SELECT COUNT(*) FROM customer_traffic
 Q: How many of the people are browsers?
 SQL: SELECT COUNT(*) FROM tracks WHERE segment='browser'
 Q: How many tracked people were classified as employees?
@@ -182,6 +186,78 @@ def drop_unusable_role_filter(sql):
     return out
 
 
+# The only values these columns can ever hold. A predicate with any other literal cannot match
+# a row, so it is always an error to keep it.
+ENUM_DOMAINS = {
+    "segment": {"passer-by", "browser", "engaged-shopper"},
+    "role": {"customer", "employee", "unknown"},
+    "carrying": {"basket", "bag", "nothing", "unknown"},
+    "direction": {"in", "out"},
+}
+
+
+def drop_impossible_enum_filters(sql):
+    """Drop `segment = 'shoppers'`-style predicates whose literal is not a possible value."""
+    out = sql
+    for col, domain in ENUM_DOMAINS.items():
+        for m in list(re.finditer(rf"\b{col}\s*=\s*'([^']*)'", out, flags=re.I)):
+            if m.group(1).lower() in domain:
+                continue
+            pred = re.escape(m.group(0))
+            out = re.sub(rf"\s+WHERE\s+{pred}\s+AND\s+", " WHERE ", out, flags=re.I)
+            out = re.sub(rf"\s+AND\s+{pred}", "", out, flags=re.I)
+            out = re.sub(rf"\s+WHERE\s+{pred}", "", out, flags=re.I)
+    return out
+
+
+def drop_hallucinated_zone_filter(sql, question):
+    """Remove `zone = 'r0c0'` / `zone IN (...)` predicates whose zone code the question never
+    mentions. The small model sometimes attaches a made-up zone literal to an unrelated question
+    ("average path length of passers-by" -> WHERE zone = 'r0c0'), silently shrinking the answer."""
+    q = question.lower()
+
+    def invented(codes):
+        return not any(c.lower() in q for c in codes)
+
+    pat_eq = re.compile(r"zone\s*=\s*'(r\d+c\d+)'", re.I)
+    pat_in = re.compile(r"zone\s+IN\s*\(([^)]*)\)", re.I)
+    out = sql
+    for pat, get in ((pat_eq, lambda m: [m.group(1)]),
+                     (pat_in, lambda m: re.findall(r"'(r\d+c\d+)'", m.group(1)))):
+        m = pat.search(out)
+        if not m:
+            continue
+        codes = get(m)
+        if codes and invented(codes):
+            pred = re.escape(m.group(0))
+            out = re.sub(rf"\s+WHERE\s+{pred}\s+AND\s+", " WHERE ", out, flags=re.I)
+            out = re.sub(rf"\s+AND\s+{pred}", "", out, flags=re.I)
+            out = re.sub(rf"\s+WHERE\s+{pred}", "", out, flags=re.I)
+    return out
+
+
+_SEGMENT_WORDS = (("passer-by", r"\bpassers?[- ]?by\b"), ("browser", r"\bbrowsers?\b"),
+                  ("engaged-shopper", r"\bengaged(?:[- ]shoppers?)?\b"))
+
+
+def ensure_segment_filter(sql, question):
+    """If the question names exactly one behaviour group ("passer-by", "browser", "engaged
+    shopper") and a plain single-table query over `tracks` ignores it, add the filter.
+    Skipped when two groups are compared, when the query already mentions `segment`, or when it
+    groups or joins (then the model deliberately did something else)."""
+    named = [value for value, pat in _SEGMENT_WORDS if re.search(pat, question, re.I)]
+    low = sql.lower()
+    if len(named) != 1 or "segment" in low or re.search(r"\b(join|group\s+by)\b", low):
+        return sql
+    if not re.search(r"\bfrom\s+tracks\b", low):
+        return sql
+    pred = f"segment = '{named[0]}'"
+    if re.search(r"\bwhere\b", sql, re.I):
+        return re.sub(r"\bwhere\b", f"WHERE {pred} AND", sql, count=1, flags=re.I)
+    m = re.search(r"\b(order\s+by|limit)\b", sql, re.I)
+    return f"{sql[:m.start()]}WHERE {pred} {sql[m.start():]}" if m else f"{sql} WHERE {pred}"
+
+
 def swap_to_owning_table(sql, error_text):
     """Single-table query that names a column living in exactly one other allowed table:
     point it at that table (e.g. `direction` is in `crossings`, not `tracks`)."""
@@ -215,7 +291,8 @@ def sql_with_repair(question, max_attempts=2):
     """
     sql = _safe_select(_generate(SQL_SYSTEM, "Q: " + question + "\nSQL:"))
     if sql is not None:
-        sql = drop_unusable_role_filter(sql)
+        sql = drop_impossible_enum_filters(sql)
+        sql = ensure_segment_filter(drop_hallucinated_zone_filter(drop_unusable_role_filter(sql), question), question)
     out = {"sql": sql, "rows": None, "truncated": False, "executed": False, "attempts": 0, "error": None}
     if sql is None:
         out["error"] = "The model did not produce a single SELECT statement."

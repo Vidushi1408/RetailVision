@@ -8,7 +8,7 @@ import time
 
 import retailvision.db as db
 
-db.DB_PATH = sys.argv[1] if len(sys.argv) > 1 else "data/eval.db"
+db.DB_PATH = next((a for a in sys.argv[1:] if not a.startswith("--")), "data/eval.db")
 from retailvision import llm_analyst as la  # noqa: E402
 
 QA = [
@@ -53,6 +53,32 @@ QA = [
      "SELECT segment, COUNT(*) FROM tracks WHERE segment IN ('passer-by','browser') GROUP BY segment"),
     ("How many people entered the store?", "SELECT COUNT(*) FROM crossings WHERE direction = 'in'"),
 ]
+
+
+# Written AFTER the prompt and guards were tuned and never used to tune them: this is the honest
+# estimate of how the analyst does on wording it has not been fitted to. Run with --heldout.
+HELDOUT = [
+    ("What's the average time shoppers spend in the store?", "SELECT AVG(dwell_sec) FROM tracks"),
+    ("How many people left through the door?", "SELECT COUNT(*) FROM crossings WHERE direction = 'out'"),
+    ("What's the largest crowd we saw?", "SELECT MAX(people_count) FROM customer_traffic"),
+    ("How many engaged shoppers spent more than 20 seconds?",
+     "SELECT COUNT(*) FROM tracks WHERE segment = 'engaged-shopper' AND dwell_sec > 20"),
+    ("Which zone did browsers prefer?",
+     "SELECT zone FROM tracks WHERE segment = 'browser' GROUP BY zone ORDER BY COUNT(*) DESC LIMIT 1"),
+    ("How many videos have we analysed?", "SELECT COUNT(*) FROM videos"),
+    ("Which segment moves fastest on average?",
+     "SELECT segment FROM tracks GROUP BY segment ORDER BY AVG(avg_speed) DESC LIMIT 1"),
+    ("How long was the footage in total?", "SELECT SUM(duration_sec) FROM videos"),
+    ("How many people stayed under 10 seconds?", "SELECT COUNT(*) FROM tracks WHERE dwell_sec < 10"),
+    ("What is the shortest dwell time among engaged shoppers?",
+     "SELECT MIN(dwell_sec) FROM tracks WHERE segment = 'engaged-shopper'"),
+    ("How many people used zone r0c1?", "SELECT COUNT(*) FROM tracks WHERE zone = 'r0c1'"),
+    ("Give the number of shoppers who were just passing by.",
+     "SELECT COUNT(*) FROM tracks WHERE segment = 'passer-by'"),
+]
+if "--heldout" in sys.argv:
+    QA = HELDOUT
+    sys.argv.remove("--heldout")
 
 
 def norm(rows):
