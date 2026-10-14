@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <!-- Chart.js for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css?v=3">
+    <link rel="stylesheet" href="/static/style.css?v=4">
 </head>
 <body>
     <!-- App Container -->
@@ -132,7 +132,7 @@
                                     <div class="dropzone-content">
                                         <div class="upload-cloud-icon">⬆️</div>
                                         <span class="dropzone-title">Drop store CCTV clip here or <span class="browse-link">browse</span></span>
-                                        <span class="dropzone-hints">Supports MP4, AVI, MOV • Model performs 3x frame striding</span>
+                                        <span class="dropzone-hints">Supports MP4, AVI, MOV, MKV, WebM</span>
                                     </div>
                                     <div class="selected-file-banner" id="selected-file-banner" style="display: none;">
                                         <span class="file-icon">🎬</span>
@@ -206,6 +206,39 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Counting line setup -->
+                    <div class="glass-card" id="lines-card">
+                        <div class="card-header">
+                            <div class="card-title-group">
+                                <span class="card-icon">🚪</span>
+                                <h2>Counting Lines</h2>
+                            </div>
+                            <span class="card-tag">Entrance setup</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="lines-help">Load a frame, then click two points to draw the line people cross.
+                                The arrow shows which way counts as <strong>in</strong>; use Flip if it is the wrong way round.
+                                Saved lines are used for the next analysis.</p>
+                            <div class="lines-controls">
+                                <label class="lines-file">Choose a clip or image
+                                    <input type="file" id="lines-frame-input" accept="video/*,image/*">
+                                </label>
+                                <button type="button" class="lines-btn" id="lines-use-upload">Use clip selected above</button>
+                                <button type="button" class="lines-btn" id="lines-preset-h">Horizontal middle</button>
+                                <button type="button" class="lines-btn" id="lines-preset-v">Vertical middle</button>
+                            </div>
+                            <canvas id="lines-canvas" width="640" height="360" aria-label="Frame to draw the counting line on. Click two points."></canvas>
+                            <div class="lines-controls">
+                                <input type="text" id="line-name" maxlength="32" placeholder="Line name, e.g. door" aria-label="Line name" value="entrance">
+                                <button type="button" class="lines-btn" id="line-flip">Flip direction</button>
+                                <button type="button" class="lines-btn lines-primary" id="line-save">Save line</button>
+                                <button type="button" class="lines-btn" id="line-clear">Clear</button>
+                            </div>
+                            <div id="lines-status" class="lines-status" role="status" aria-live="polite"></div>
+                            <ul id="saved-lines" class="saved-lines"></ul>
                         </div>
                     </div>
 
@@ -370,6 +403,7 @@
     </div>
 
     <!-- Application Dashboard Logic -->
-    <script src="/static/dashboard.js?v=3"></script>
+    <script src="/static/dashboard.js?v=4"></script>
+    <script src="/static/lines.js?v=4"></script>
 </body>
 </html>

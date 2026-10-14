@@ -39,7 +39,7 @@ clip for occupancy. State clearly that the store-specific claim is then unproven
 ## Phase D: product features a store owner needs (Weeks 2-4)
 | # | Task | Exit criterion |
 |---|---|---|
-| D1 | **Entrance-line setup screen:** draw the line on a frame, save per camera (replaces the `COUNT_LINES` env var). | A non-developer can set a line in under a minute |
+| D1 | **Entrance-line setup screen:** draw the line on a frame, save it (replaces the `COUNT_LINES` env var). **Done:** dashboard card, `/lines/` API, server-side frame fallback, 6 tests; click-tested end to end. Per-camera storage comes with D2. | A non-developer can set a line in under a minute |
 | D2 | **Multiple cameras/lines** with names (door, till queue, aisle). | Crossings and occupancy reported per line |
 | D3 | **Live stream input** (RTSP or webcam) with a rolling window instead of file upload. | Runs 30 minutes without growing memory |
 | D4 | **Persist jobs** in SQLite so a restart does not lose queued work. | Restart test passes |

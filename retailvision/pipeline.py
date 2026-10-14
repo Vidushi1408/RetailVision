@@ -8,11 +8,25 @@ from .db import connect
 from .tracker import track_features, track_video
 
 
-# Counting lines as {"name": [ax, ay, bx, by]} in normalised frame coordinates (0-1).
-# Override with the COUNT_LINES env var (JSON). Default: one horizontal line mid-frame.
+DEFAULT_LINES = {"entrance": [0.0, 0.5, 1.0, 0.5]}
+
+
 def count_lines():
+    """Counting lines as {"name": [ax, ay, bx, by]} in normalised frame coordinates (0-1).
+
+    Priority: lines saved from the dashboard (count_lines table), then the COUNT_LINES env var
+    (JSON), then one horizontal line across the middle of the frame.
+    """
+    conn = connect()
+    try:
+        saved = {r["name"]: [r["x1"], r["y1"], r["x2"], r["y2"]]
+                 for r in conn.execute("SELECT * FROM count_lines ORDER BY created").fetchall()}
+    finally:
+        conn.close()
+    if saved:
+        return saved
     raw = os.getenv("COUNT_LINES")
-    return json.loads(raw) if raw else {"entrance": [0.0, 0.5, 1.0, 0.5]}
+    return json.loads(raw) if raw else dict(DEFAULT_LINES)
 
 
 def analyze(path, filename, use_clip=True):

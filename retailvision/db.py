@@ -34,6 +34,10 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             video_id INTEGER, line_name TEXT, direction TEXT, sec REAL
         );
+        CREATE TABLE IF NOT EXISTS count_lines (
+            name TEXT PRIMARY KEY,
+            x1 REAL, y1 REAL, x2 REAL, y2 REAL, created TEXT
+        );
         CREATE INDEX IF NOT EXISTS idx_crossings_video ON crossings(video_id);
         CREATE INDEX IF NOT EXISTS idx_traffic_timestamp ON customer_traffic(timestamp);
         CREATE INDEX IF NOT EXISTS idx_tracks_video_id ON tracks(video_id);

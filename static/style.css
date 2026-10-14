@@ -1017,3 +1017,24 @@ body {
 .footer-divider {
     opacity: 0.4;
 }
+
+
+/* ---- Counting line setup ---- */
+.lines-help { color: var(--text-muted, #9fb0c8); font-size: 0.9rem; margin: 0 0 12px; line-height: 1.5; }
+.lines-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; align-items: center; }
+.lines-controls input[type="text"] { flex: 1 1 160px; min-width: 140px; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.05); color: inherit; font: inherit; }
+.lines-file { font-size: 0.85rem; cursor: pointer; }
+.lines-file input { display: block; margin-top: 4px; max-width: 220px; }
+.lines-btn { padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.06); color: inherit; font: inherit; font-size: 0.85rem; cursor: pointer; }
+.lines-btn:hover { background: rgba(255,255,255,0.12); }
+.lines-primary { background: #6366f1; border-color: #6366f1; color: #fff; }
+#lines-canvas { width: 100%; max-width: 640px; height: auto; border-radius: 10px; cursor: crosshair; display: block;
+    border: 1px solid rgba(255,255,255,0.12); background: #1b2433; }
+.lines-status { min-height: 1.4em; font-size: 0.9rem; color: #14b8a6; }
+.lines-status.lines-error { color: #f87171; }
+.saved-lines { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.saved-lines li { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px;
+    border-radius: 8px; background: rgba(255,255,255,0.04); font-size: 0.9rem; }
+.saved-lines .saved-empty { color: #9fb0c8; background: none; padding-left: 0; }
