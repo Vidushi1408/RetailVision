@@ -330,3 +330,58 @@ Closed the items that did not need new footage.
 Known limits that remain (unchanged, need data or hardware): unique-visitor accuracy, crossing
 recall against a full hand count, staff/customer and bag labels, forecast benefit, continuous
 live streaming, `v1.0` tag.
+
+## 15. Measurement pass on the supplied footage (2026-10-14)
+
+Everything below is on the two clips the user supplied, hand-labelled by a single annotator (me),
+so treat it as indicative, not as a benchmark. Labels and candidate lists are committed in
+`evaluation/ground_truth/` (no images).
+
+### Crossings on the entrance clip (121 s, 102 candidate events: 87 from the production settings,
+### 15 more surfaced by a looser detector pass to test recall)
+| Metric | Value |
+|---|---|
+| Events the counter reported (after 3 s reversal cancelling) | 57 |
+| Real, correct-direction first crossings among them | 37 |
+| Duplicates (same person again) / wrong direction | 14 / 2 |
+| **Precision** | **70%** (58% before cancelling) |
+| Distinct people who really crossed (hand labelled) | ~52 |
+| **Recall** | **71%** |
+| F1 | 0.70 |
+| Count error | 57 reported vs ~52 real (about +10%); without cancelling 87 (+67%) |
+
+- Cancelling reversals removed 30 events: 17 correct removals (13 duplicates, 4 wrong direction)
+  and 9 real crossings (on tracks whose ID jumped between people). It trades recall for precision;
+  F1 is about the same either way, but the reported total is far closer with it.
+- 11 real crossings were not reported: 2 only a looser detector found, 9 lost to cancelling.
+- The earlier "~90% precision by eye" (section 12) was optimistic; this stricter pass supersedes it.
+- Groups walking together are one box, so individuals are undercounted; not modelled here.
+- "People tracked" (164) is not comparable to the ~52 crossers: it also counts everyone visible
+  through the glass and anyone who never crossed. It stays labelled an estimate.
+
+### Carrying a bag (53 labelled crops from the entrance clip, 188-295 px tall; 27 bag / 26 none)
+| Method | Accuracy | Precision | Recall |
+|---|---|---|---|
+| Always "no bag" (baseline) | 51% | - | 0% |
+| CLIP zero-shot, shipped wording | **74%** | 69% | 89% |
+| CLIP linear probe, leave-one-out | 75-79% | 77-83% | 74% | (inflated: same person in several crops) |
+
+- Contrast with the mall crops (87-188 px): below baseline. Crop size is the deciding factor.
+- Shipped: `carrying_bag` runs only when the upload asks for CLIP and the crop is at least 180 px
+  tall; smaller people are `unknown`. n=53 means roughly +/-12 points.
+- Staff vs customer remains unvalidated (no uniform visible in the test footage) and off.
+
+### 30-minute soak (rolling monitor, entrance clip as a looping fake camera)
+135 windows analysed, 0 errors, server memory 432 MB (middle third) vs 451 MB (last third) = +4.4%
+(criterion <10%), range 202-663 MB. Memory is noisy (MPS/GC), so a leak below ~10% cannot be ruled
+out. Isolated server and database (`RETAILVISION_DB`); the real dashboard data was untouched.
+
+### Forecast
+Added "same hour yesterday" (matched by timestamp, gap-safe) next to the LSTM and last-value
+options; the backtest picks the best of the three. Tested on clearly synthetic data only, so
+this proves the selection logic, not that any real store benefits. The monitor above is the
+collector: a camera left on accumulates the hourly series the forecaster needs.
+
+### Still not done
+Forecast benefit on real data (needs days of footage); staff/customer; frame-by-frame real-time
+streaming (the monitor is near-continuous, with gaps while a window is analysed).
