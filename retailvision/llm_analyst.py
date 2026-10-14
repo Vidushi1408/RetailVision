@@ -7,7 +7,7 @@ the rows in plain English. Forecast questions are routed to our own LSTM.
 import os
 import re
 
-from .db import connect
+from .sqlguard import QueryRejected, QueryTimeout, execute_readonly
 from .forecast import forecast
 
 MODEL_NAME = os.getenv("LOCAL_LLM", "Qwen/Qwen2.5-1.5B-Instruct")
@@ -115,15 +115,16 @@ def ask(question):
     sql = _safe_select(_generate(SQL_SYSTEM, "Q: " + question + "\nSQL:"))
     if sql is None:
         return {"answer": "I could not turn that into a safe query. Try rephrasing."}
-    conn = connect()
     try:
-        conn.execute("PRAGMA query_only = ON")
-        rows = [dict(r) for r in conn.execute(sql).fetchmany(50)]
+        rows, truncated = execute_readonly(sql)
+    except QueryRejected as e:
+        return {"answer": str(e), "sql": sql}
+    except QueryTimeout as e:
+        return {"answer": f"{e} Try a narrower question.", "sql": sql}
     except Exception as e:
         return {"answer": f"The generated query failed: {e}", "sql": sql}
-    finally:
-        conn.close()
     answer = _generate("You are a retail analytics assistant. Using only the data given, "
                        "answer the question in 1-3 simple sentences.",
-                       f"Question: {question}\nSQL: {sql}\nRows: {rows}")
-    return {"answer": answer, "sql": sql, "rows": rows}
+                       f"Question: {question}\nSQL: {sql}\nRows: {rows}"
+                       + ("\n(Only the first rows are shown; there are more.)" if truncated else ""))
+    return {"answer": answer, "sql": sql, "rows": rows, "truncated": truncated}

@@ -15,7 +15,7 @@ First use downloads YOLOv8n, CLIP and Qwen weights (a few GB) once; afterwards i
 ## Run
 ```bash
 .venv/bin/uvicorn main:app --reload     # dashboard at http://127.0.0.1:8000
-.venv/bin/python -m unittest test_retailvision test_api test_counting -v
+.venv/bin/python -m unittest test_retailvision test_api test_counting test_security -v
 ```
 The SQLite database (`store_analytics.db`) is created automatically and is not tracked in git.
 Put sample videos in the project root; `*.mp4` and `*.avi` are git-ignored.
@@ -46,6 +46,10 @@ Then build `data/mall_counts.npy` from `mall_dataset/mall_gt.mat` (`count` array
 | `ENABLE_CLIP_ATTRIBUTES` | `0` | `1` enables CLIP staff/customer + carrying labels. Off because they were not accurate on 640x480 CCTV. |
 | `COUNT_LINES` | one horizontal mid-frame line | Fallback only: JSON `{"name": [x1,y1,x2,y2]}` in 0-1 frame coordinates. Lines saved in the dashboard take priority. |
 | `MAX_UPLOAD_MB` | `500` | Upload size limit (HTTP 413 above it). |
+| `RETAILVISION_API_KEY` | empty (open) | If set, every route except the page, `/static/`, `/login` and `/health` needs this key (`X-API-Key` header or the cookie from `POST /login`). The dashboard asks for it on a 401. |
+| `UPLOAD_DIR` | `uploads` | Where background uploads wait for their job. Survives restarts. |
+| `MAX_QUEUED_JOBS` | `5` | Queued + running analyses allowed at once (HTTP 429 above it). |
+| `ASK_PER_MINUTE` | `20` | Analyst questions per client per minute (HTTP 429 above it). |
 | `LOCAL_LLM` | `Qwen/Qwen2.5-1.5B-Instruct` | Local model used by `/ask/`. |
 
 ## API notes
@@ -55,6 +59,13 @@ Then build `data/mall_counts.npy` from `mall_dataset/mall_gt.mat` (`count` array
 - Counting lines: draw them in the dashboard (Counting Lines card). API: `GET /lines/`, `PUT /lines/`
   `{name,x1,y1,x2,y2}` (0-1 fractions, max 8), `DELETE /lines/{name}`. "in" is the right-hand side
   of A to B. `POST /frame/` returns a JPEG frame from a clip (used to draw on).
+- Jobs are stored in SQLite: queued or interrupted analyses are re-queued on restart; `GET /jobs/`
+  lists recent ones. A job whose upload was lost is marked as an error.
+- The analyst can only read `customer_traffic`, `videos`, `tracks` and `crossings` (SQLite
+  authorizer allow-list), is read-only, stops after 5 s and returns at most 50 rows.
+- Security notes: the shared key is one secret for everyone, not per-user accounts; the cookie is
+  HttpOnly and SameSite=Strict but only `Secure` if you add HTTPS in front; rate limits live in
+  process memory (reset on restart).
 - Accepted video types: mp4, avi, mov, mkv, webm.
 
 ## Accuracy checks (need `data/`, see above)

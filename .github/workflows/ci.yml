@@ -16,4 +16,4 @@ jobs:
       - name: Unit and API tests
         env:
           PRELOAD_MODELS: none
-        run: python -m unittest test_retailvision test_api test_counting -v
+        run: python -m unittest test_retailvision test_api test_counting test_security -v

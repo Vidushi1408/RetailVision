@@ -34,6 +34,12 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             video_id INTEGER, line_name TEXT, direction TEXT, sec REAL
         );
+        CREATE TABLE IF NOT EXISTS jobs (
+            id TEXT PRIMARY KEY, kind TEXT, params TEXT, status TEXT,
+            created REAL, started REAL, finished REAL,
+            result TEXT, error TEXT, upload_path TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
         CREATE TABLE IF NOT EXISTS count_lines (
             name TEXT PRIMARY KEY,
             x1 REAL, y1 REAL, x2 REAL, y2 REAL, created TEXT

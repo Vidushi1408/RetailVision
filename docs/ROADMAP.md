@@ -42,8 +42,8 @@ clip for occupancy. State clearly that the store-specific claim is then unproven
 | D1 | **Entrance-line setup screen:** draw the line on a frame, save it (replaces the `COUNT_LINES` env var). **Done:** dashboard card, `/lines/` API, server-side frame fallback, 6 tests; click-tested end to end. Per-camera storage comes with D2. | A non-developer can set a line in under a minute |
 | D2 | **Multiple cameras/lines** with names (door, till queue, aisle). | Crossings and occupancy reported per line |
 | D3 | **Live stream input** (RTSP or webcam) with a rolling window instead of file upload. | Runs 30 minutes without growing memory |
-| D4 | **Persist jobs** in SQLite so a restart does not lose queued work. | Restart test passes |
-| D5 | **Auth and limits:** a simple API key or login on upload/ask; analyst table allow-list and a 5 s SQL timeout. | Unauthenticated calls return 401; a runaway query is cancelled |
+| D4 | **Persist jobs** in SQLite so a restart does not lose queued work. **Done:** `jobs` table, recovery on startup, queue cap, orphan cleanup; verified by killing the server mid-job. | Restart test passes |
+| D5 | **Auth and limits:** a simple API key or login on upload/ask; analyst table allow-list and a 5 s SQL timeout. **Done:** shared key + login cookie, SQLite authorizer allow-list, 5 s timeout, 50-row cap, question length and per-client rate limits. | Unauthenticated calls return 401; a runaway query is cancelled |
 | D6 | **Privacy controls:** do not keep the uploaded video after analysis (already deleted), optional face blur on exported frames, retention setting for the database, a short privacy note in the README. | Documented and tested |
 
 ## Phase E: quality gates and release (Week 4)

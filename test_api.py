@@ -12,6 +12,7 @@ import retailvision.db as db
 
 _tmp = tempfile.mkdtemp()
 db.DB_PATH = os.path.join(_tmp, "test.db")  # must be set before main touches the DB
+os.environ.setdefault("UPLOAD_DIR", os.path.join(_tmp, "uploads"))
 import main  # noqa: E402
 
 client = TestClient(main.app)

@@ -12,20 +12,33 @@ import re
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from fastapi.requests import Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from retailvision import jobs
+from retailvision import auth, jobs
 from retailvision.db import connect, init_db
 from retailvision.forecast import forecast
 from retailvision.pipeline import analyze
 
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "500"))
 ALLOWED_EXT = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")  # background uploads live here until their job ends
+MAX_QUESTION_CHARS = 500
+ask_limiter = auth.RateLimiter(int(os.getenv("ASK_PER_MINUTE", "20")))
+
+
+def analyze_job(path, filename, use_clip=True):
+    return analyze(path, filename, use_clip=use_clip)
+
+
+jobs.register("analyze", analyze_job)
 
 
 @asynccontextmanager
 async def lifespan(_app):
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    jobs.resume(UPLOAD_DIR)  # re-queue analyses interrupted by a restart
     if os.getenv("PRELOAD_MODELS", "yolo,llm") not in ("", "none"):
         from retailvision.preload import preload
         threading.Thread(target=preload, daemon=True).start()  # don't delay startup
@@ -38,19 +51,47 @@ templates = Jinja2Templates(directory="templates")
 init_db()
 
 
+@app.middleware("http")
+async def require_key(request: Request, call_next):
+    if auth.is_public(request.url.path) or auth.is_authorized(request):
+        return await call_next(request)
+    return JSONResponse({"detail": "API key required."}, status_code=401)
+
+
+class LoginIn(BaseModel):
+    key: str
+
+
+@app.post("/login")
+def login(body: LoginIn):
+    """Exchange the shared key for an HttpOnly cookie (the dashboard calls this after a 401)."""
+    if not auth.configured_key():
+        return {"auth": "disabled"}
+    if not auth.key_matches(body.key):
+        raise HTTPException(401, "Wrong key.")
+    resp = JSONResponse({"auth": "ok"})
+    resp.set_cookie(auth.COOKIE, body.key, httponly=True, samesite="strict", max_age=12 * 3600)
+    return resp
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "auth_required": bool(auth.configured_key())}
+
+
 @app.get("/")
 def home(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
 
 
 
-async def _save_upload(file: UploadFile) -> str:
-    """Stream an upload to a temp file, enforcing type and size limits. Caller must delete it."""
+async def _save_upload(file: UploadFile, dest_dir: str | None = None) -> str:
+    """Stream an upload to disk, enforcing type and size limits. Caller must delete it."""
     suffix = os.path.splitext(file.filename or "")[1].lower()
     if suffix not in ALLOWED_EXT:
         raise HTTPException(400, f"Unsupported file type '{suffix}'. Use one of {sorted(ALLOWED_EXT)}.")
     limit, written = MAX_UPLOAD_MB * 1024 * 1024, 0
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False, dir=dest_dir) as tmp:
         while chunk := await file.read(1024 * 1024):
             written += len(chunk)
             if written > limit:
@@ -91,15 +132,26 @@ async def analyze_video(file: UploadFile = File(...), use_clip: bool = True,
     background=false (default): block and return the summary.
     background=true: return {"job_id"} immediately; poll GET /jobs/{job_id}.
     """
-    path = await _save_upload(file)
     if background:
-        job_id = jobs.submit(analyze, path, file.filename, use_clip=use_clip,
-                             cleanup_path=path)
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        path = await _save_upload(file, UPLOAD_DIR)
+        try:
+            job_id = jobs.submit("analyze", {"path": os.path.abspath(path), "filename": file.filename,
+                                             "use_clip": use_clip}, upload_path=os.path.abspath(path))
+        except jobs.QueueFull as e:
+            os.unlink(path)
+            raise HTTPException(429, str(e))
         return {"job_id": job_id, "status": "queued"}
+    path = await _save_upload(file)
     try:
         return analyze(path, file.filename, use_clip=use_clip)
     finally:
         os.unlink(path)
+
+
+@app.get("/jobs/")
+def list_jobs(limit: int = 20):
+    return {"jobs": jobs.recent(min(max(limit, 1), 100))}
 
 
 @app.get("/jobs/{job_id}")
@@ -256,7 +308,12 @@ def delete_line(name: str):
 
 
 @app.get("/ask/")
-def ask(q: str):
+def ask(q: str, request: Request = None):
+    if len(q) > MAX_QUESTION_CHARS:
+        raise HTTPException(422, f"Question is too long (max {MAX_QUESTION_CHARS} characters).")
+    client = request.client.host if request is not None and request.client else "local"
+    if not ask_limiter.allow(client):
+        raise HTTPException(429, "Too many questions; wait a minute and try again.")
     from retailvision.llm_analyst import ask as ask_llm
     return ask_llm(q)
 
