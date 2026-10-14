@@ -14,14 +14,9 @@ import os
 import tempfile
 import time
 import unittest
-from types import SimpleNamespace
 from unittest import mock
 
-import cv2
-import numpy as np
-import torch
 from fastapi.testclient import TestClient
-from ultralytics.engine.results import Boxes
 
 import retailvision.db as db
 
@@ -31,41 +26,7 @@ os.environ["UPLOAD_DIR"] = os.path.join(_tmp, "uploads")
 import main  # noqa: E402
 from retailvision import llm_analyst, tracker  # noqa: E402
 
-W, H, FRAMES, FPS = 320, 240, 14, 5
-
-
-def person_box(cx, cy, w=0.125, h=0.34):
-    """Normalised centre/size -> pixel xyxy + conf + class(0=person)."""
-    return [(cx - w / 2) * W, (cy - h / 2) * H, (cx + w / 2) * W, (cy + h / 2) * H, 0.9, 0]
-
-
-def scripted_frame(i):
-    t = i / (FRAMES - 1)
-    down_a = person_box(0.15, 0.15 + 0.70 * t)      # 0.15 -> 0.85: crosses y = 0.5 downwards
-    down_b = person_box(0.35, 0.15 + 0.70 * t)
-    still = person_box(0.55, 0.25)                   # never reaches the line
-    up = person_box(0.85, 0.85 - 0.70 * t)          # 0.85 -> 0.15: crosses y = 0.5 upwards
-    hover = person_box(0.68, 0.5 + (0.012 if i % 2 else -0.012))  # within the 0.02 margin
-    return [down_a, down_b, still, up, hover]
-
-
-class ScriptedDetector:
-    """Stands in for ultralytics YOLO.predict: returns the next scripted frame each call."""
-
-    def __init__(self):
-        self.calls = 0
-
-    def predict(self, frame, **kwargs):
-        boxes = Boxes(torch.tensor(scripted_frame(self.calls), dtype=torch.float32), (H, W))
-        self.calls += 1
-        return [SimpleNamespace(boxes=boxes)]
-
-
-def write_video(path):
-    vw = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"mp4v"), FPS, (W, H))
-    for _ in range(FRAMES):
-        vw.write(np.full((H, W, 3), 100, np.uint8))
-    vw.release()
+from scripted_detector import FRAMES, FPS, ScriptedDetector, write_video  # noqa: E402
 
 
 class TestEndToEnd(unittest.TestCase):

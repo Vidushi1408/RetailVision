@@ -390,7 +390,7 @@ function initVideoUpload() {
         formData.append("file", file);
 
         try {
-            const response = await fetch(`/analyze_video/?use_clip=${useClip}&background=true`, {
+            const response = await fetch(`/analyze_video/?use_clip=${useClip}&background=true&camera=${encodeURIComponent((document.getElementById("camera-name") || {}).value || "default")}`, {
                 method: "POST",
                 body: formData
             });

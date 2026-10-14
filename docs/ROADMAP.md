@@ -40,18 +40,18 @@ clip for occupancy. State clearly that the store-specific claim is then unproven
 | # | Task | Exit criterion |
 |---|---|---|
 | D1 | **Entrance-line setup screen:** draw the line on a frame, save it (replaces the `COUNT_LINES` env var). **Done:** dashboard card, `/lines/` API, server-side frame fallback, 6 tests; click-tested end to end. Per-camera storage comes with D2. | A non-developer can set a line in under a minute |
-| D2 | **Multiple cameras/lines** with names (door, till queue, aisle). | Crossings and occupancy reported per line |
-| D3 | **Live stream input** (RTSP or webcam) with a rolling window instead of file upload. | Runs 30 minutes without growing memory |
+| D2 | **Multiple cameras/lines** with names (door, till queue, aisle). **Done:** `camera` on lines and videos (with DB migration) and per-camera line selection on upload. Occupancy is still per video, not per camera view. | Crossings and occupancy reported per line |
+| D3 | **Live stream input** (RTSP or webcam) with a rolling window instead of file upload. **Partly done:** configured sources are recorded for up to 300 s and analysed as a job (near-live). Not done: continuous frame-by-frame streaming and the 30-minute soak test, which need a real camera. | Runs 30 minutes without growing memory |
 | D4 | **Persist jobs** in SQLite so a restart does not lose queued work. **Done:** `jobs` table, recovery on startup, queue cap, orphan cleanup; verified by killing the server mid-job. | Restart test passes |
 | D5 | **Auth and limits:** a simple API key or login on upload/ask; analyst table allow-list and a 5 s SQL timeout. **Done:** shared key + login cookie, SQLite authorizer allow-list, 5 s timeout, 50-row cap, question length and per-client rate limits. | Unauthenticated calls return 401; a runaway query is cancelled |
-| D6 | **Privacy controls:** do not keep the uploaded video after analysis (already deleted), optional face blur on exported frames, retention setting for the database, a short privacy note in the README. | Documented and tested |
+| D6 | **Privacy controls:** do not keep the uploaded video after analysis (already deleted), optional face blur on exported frames, retention setting for the database, a short privacy note in the README. **Done:** retention (`RETENTION_DAYS`, purge, wipe), dashboard Privacy card, README. Face blur was not built: the app never stores or exports face or person images, so there is nothing to blur. | Documented and tested |
 
 ## Phase E: quality gates and release (Week 4)
 | # | Task | Exit criterion |
 |---|---|---|
 | E1 | Automated end-to-end test on a 20 s fixture clip (upload, job, summary, crossings, analyst answer). **Done** as `test_e2e.py` with a scripted detector and LLM (known in/out/still people); mutation-checked; runs in CI. A real-model smoke test on a licensed clip is still open. | Runs in CI |
 | E2 | Add `count_eval` and the 30-question analyst benchmark as scheduled/optional CI jobs with thresholds (MAE < 6, SQL ≥ 80%). | Regressions fail the build |
-| E3 | Browser test of the dashboard flow (Playwright). | Upload and results asserted |
+| E3 | Browser test of the dashboard flow (Playwright). **Done:** `test_browser.py`, 5 tests in real Chromium (load, upload with known results, draw and save a line, privacy wipe, key prompt). | Upload and results asserted |
 | E4 | Repo tidy: delete merged branches, `git rm --cached yolov8n.pt`, pin Python version in CI, tag `v1.0`. **Done** except the tag: merged branches deleted, weights untracked, `.python-version` + CI weight cache. Tag `v1.0` waits for Phase A/B validation so the version number does not overstate what is proven. | Clean tree, release tag |
 | E5 | Rehearse the presentation with the real app; update the deck numbers from Phase B/C. | One timed run-through; deck matches `PLAN.md` |
 

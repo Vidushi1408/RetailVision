@@ -1038,3 +1038,10 @@ body {
 .saved-lines li { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px;
     border-radius: 8px; background: rgba(255,255,255,0.04); font-size: 0.9rem; }
 .saved-lines .saved-empty { color: #9fb0c8; background: none; padding-left: 0; }
+
+/* ---- Camera field, selects, danger button ---- */
+.camera-field { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; margin: 6px 0; }
+.camera-field input, .lines-controls select, .lines-controls input[type="number"] {
+    padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.05); color: inherit; font: inherit; max-width: 160px; }
+.lines-danger { border-color: #f87171; color: #f87171; }

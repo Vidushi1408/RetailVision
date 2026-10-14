@@ -15,7 +15,7 @@ First use downloads the YOLOv8s and Qwen weights (a few GB; CLIP only if you ena
 ## Run
 ```bash
 .venv/bin/uvicorn main:app --reload     # dashboard at http://127.0.0.1:8000
-.venv/bin/python -m unittest test_retailvision test_api test_counting test_security test_e2e -v
+.venv/bin/python -m unittest test_retailvision test_api test_counting test_security test_e2e test_features test_browser -v
 ```
 The SQLite database (`store_analytics.db`) is created automatically and is not tracked in git.
 Put sample videos in the project root; `*.mp4` and `*.avi` are git-ignored.
@@ -46,6 +46,8 @@ Then build `data/mall_counts.npy` from `mall_dataset/mall_gt.mat` (`count` array
 | `ENABLE_CLIP_ATTRIBUTES` | `0` | `1` enables CLIP staff/customer + carrying labels. Off because they were not accurate on 640x480 CCTV. |
 | `COUNT_LINES` | one horizontal mid-frame line | Fallback only: JSON `{"name": [x1,y1,x2,y2]}` in 0-1 frame coordinates. Lines saved in the dashboard take priority. |
 | `MAX_UPLOAD_MB` | `500` | Upload size limit (HTTP 413 above it). |
+| `RETENTION_DAYS` | `0` (keep) | If > 0, analytics older than this are deleted at server start. Also available as `POST /privacy/purge?days=N`. |
+| `STREAM_SOURCES` | empty | JSON `{"name": "rtsp://... or /path/file.mp4"}`. Names appear in the dashboard's Camera Streams card; URLs are never sent to the browser. |
 | `RETAILVISION_API_KEY` | empty (open) | If set, every route except the page, `/static/`, `/login` and `/health` needs this key (`X-API-Key` header or the cookie from `POST /login`). The dashboard asks for it on a 401. |
 | `UPLOAD_DIR` | `uploads` | Where background uploads wait for their job. Survives restarts. |
 | `MAX_QUEUED_JOBS` | `5` | Queued + running analyses allowed at once (HTTP 429 above it). |
@@ -66,11 +68,21 @@ Then build `data/mall_counts.npy` from `mall_dataset/mall_gt.mat` (`count` array
 - Security notes: the shared key is one secret for everyone, not per-user accounts; the cookie is
   HttpOnly and SameSite=Strict but only `Secure` if you add HTTPS in front; rate limits live in
   process memory (reset on restart).
+- Cameras: `camera` (letters, digits, space, `_`, `-`) on uploads and on counting lines groups lines
+  per camera; an analysis for camera X uses only X's lines, falling back to the default line.
+- Streams: `GET /streams/` lists configured names; `POST /analyze_stream/?name=&seconds=&camera=`
+  records up to 300 s from a configured source and analyses it as a background job (near-live,
+  not frame-by-frame real time).
+- Privacy: `GET /privacy/` describes what is stored; `POST /privacy/purge?days=N` deletes older
+  analytics; `DELETE /privacy/data?confirm=yes` deletes all analytics (line settings are kept).
+  Uploaded video is deleted when its job ends and person crops are never written to disk.
 - Accepted video types: mp4, avi, mov, mkv, webm.
 
 ## Tests
 `test_e2e.py` runs upload -> background job -> tracking -> crossings -> database -> API -> analyst
 answer with a scripted detector and a scripted LLM, so it needs no weights and is deterministic.
+`test_browser.py` drives the dashboard in Chromium (Playwright; install with
+`pip install -r requirements-dev.txt && python -m playwright install chromium`; skipped if absent).
 The accuracy checks below are separate because they need real data and models.
 
 ## Accuracy checks (need `data/`, see above)

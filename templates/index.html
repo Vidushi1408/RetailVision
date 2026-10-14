@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <!-- Chart.js for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/style.css?v=5">
+    <link rel="stylesheet" href="/static/style.css?v=6">
 </head>
 <body>
     <!-- App Container -->
@@ -142,6 +142,10 @@
                                 </div>
 
                                 <div class="options-row">
+                                    <label class="camera-field" for="camera-name">Camera
+                                        <input type="text" id="camera-name" list="camera-list" value="default" maxlength="32" autocomplete="off">
+                                        <datalist id="camera-list"></datalist>
+                                    </label>
                                     <label class="toggle-control" for="toggle-use-clip">
                                         <input type="checkbox" id="toggle-use-clip">
                                         <span class="toggle-slider"></span>
@@ -232,6 +236,7 @@
                             </div>
                             <canvas id="lines-canvas" width="640" height="360" aria-label="Frame to draw the counting line on. Click two points."></canvas>
                             <div class="lines-controls">
+                                <input type="text" id="line-camera" maxlength="32" placeholder="Camera" aria-label="Camera name" value="default" list="camera-list">
                                 <input type="text" id="line-name" maxlength="32" placeholder="Line name, e.g. door" aria-label="Line name" value="entrance">
                                 <button type="button" class="lines-btn" id="line-flip">Flip direction</button>
                                 <button type="button" class="lines-btn lines-primary" id="line-save">Save line</button>
@@ -239,6 +244,46 @@
                             </div>
                             <div id="lines-status" class="lines-status" role="status" aria-live="polite"></div>
                             <ul id="saved-lines" class="saved-lines"></ul>
+                        </div>
+                    </div>
+
+                    <!-- Camera streams -->
+                    <div class="glass-card" id="streams-card" style="display: none;">
+                        <div class="card-header">
+                            <div class="card-title-group">
+                                <span class="card-icon">📡</span>
+                                <h2>Camera Streams</h2>
+                            </div>
+                            <span class="card-tag">Near-live</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="lines-help">Records a short window from a configured camera, then analyses it like an uploaded clip.</p>
+                            <div class="lines-controls">
+                                <select id="stream-name" aria-label="Camera stream"></select>
+                                <input type="number" id="stream-seconds" min="1" max="300" value="30" aria-label="Seconds to record">
+                                <button type="button" class="lines-btn lines-primary" id="stream-run">Analyse</button>
+                            </div>
+                            <div id="stream-status" class="lines-status" role="status" aria-live="polite"></div>
+                        </div>
+                    </div>
+
+                    <!-- Privacy -->
+                    <div class="glass-card" id="privacy-card">
+                        <div class="card-header">
+                            <div class="card-title-group">
+                                <span class="card-icon">🔒</span>
+                                <h2>Privacy &amp; Data</h2>
+                            </div>
+                            <span class="card-tag">Local only</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="lines-help" id="privacy-summary">Loading...</p>
+                            <div class="lines-controls">
+                                <input type="number" id="purge-days" min="0" value="30" aria-label="Delete data older than this many days">
+                                <button type="button" class="lines-btn" id="purge-run">Delete data older than N days</button>
+                                <button type="button" class="lines-btn lines-danger" id="wipe-run">Delete all analytics data</button>
+                            </div>
+                            <div id="privacy-status" class="lines-status" role="status" aria-live="polite"></div>
                         </div>
                     </div>
 
@@ -403,8 +448,9 @@
     </div>
 
     <!-- Application Dashboard Logic -->
-    <script src="/static/auth.js?v=5"></script>
-    <script src="/static/dashboard.js?v=5"></script>
-    <script src="/static/lines.js?v=5"></script>
+    <script src="/static/auth.js?v=6"></script>
+    <script src="/static/dashboard.js?v=6"></script>
+    <script src="/static/lines.js?v=6"></script>
+    <script src="/static/extras.js?v=6"></script>
 </body>
 </html>

@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from retailvision import auth, jobs
+from retailvision import auth, jobs, privacy, streams
 from retailvision.db import connect, init_db
 from retailvision.forecast import forecast
 from retailvision.pipeline import analyze
@@ -25,20 +25,41 @@ MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "500"))
 ALLOWED_EXT = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")  # background uploads live here until their job ends
 MAX_QUESTION_CHARS = 500
+RETENTION_DAYS = int(os.getenv("RETENTION_DAYS", "0"))  # 0 = keep analytics until wiped
+CAMERA_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,31}$")
 ask_limiter = auth.RateLimiter(int(os.getenv("ASK_PER_MINUTE", "20")))
 
 
-def analyze_job(path, filename, use_clip=True):
-    return analyze(path, filename, use_clip=use_clip)
+def analyze_job(path, filename, use_clip=True, camera="default"):
+    return analyze(path, filename, use_clip=use_clip, camera=camera)
+
+
+def stream_job(name, seconds, camera="default"):
+    path = streams.record(name, seconds)
+    try:
+        return analyze(path, f"stream:{name}", use_clip=False, camera=camera)
+    finally:
+        if os.path.exists(path):
+            os.unlink(path)
 
 
 jobs.register("analyze", analyze_job)
+jobs.register("stream", stream_job)
+
+
+def _valid_camera(camera: str) -> str:
+    camera = (camera or "default").strip()
+    if not CAMERA_NAME.match(camera):
+        raise HTTPException(422, "Camera name must be 1-32 characters: letters, digits, space, _ or -.")
+    return camera
 
 
 @asynccontextmanager
 async def lifespan(_app):
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     jobs.resume(UPLOAD_DIR)  # re-queue analyses interrupted by a restart
+    if RETENTION_DAYS > 0:
+        privacy.purge_older_than(RETENTION_DAYS)
     if os.getenv("PRELOAD_MODELS", "yolo,llm") not in ("", "none"):
         from retailvision.preload import preload
         threading.Thread(target=preload, daemon=True).start()  # don't delay startup
@@ -126,25 +147,26 @@ async def extract_frame(file: UploadFile = File(...)):
 
 @app.post("/analyze_video/")
 async def analyze_video(file: UploadFile = File(...), use_clip: bool = True,
-                        background: bool = False):
+                        background: bool = False, camera: str = "default"):
     """Track people through the video, classify, segment, store.
 
     background=false (default): block and return the summary.
     background=true: return {"job_id"} immediately; poll GET /jobs/{job_id}.
     """
+    camera = _valid_camera(camera)
     if background:
         os.makedirs(UPLOAD_DIR, exist_ok=True)
         path = await _save_upload(file, UPLOAD_DIR)
         try:
             job_id = jobs.submit("analyze", {"path": os.path.abspath(path), "filename": file.filename,
-                                             "use_clip": use_clip}, upload_path=os.path.abspath(path))
+                                             "use_clip": use_clip, "camera": camera}, upload_path=os.path.abspath(path))
         except jobs.QueueFull as e:
             os.unlink(path)
             raise HTTPException(429, str(e))
         return {"job_id": job_id, "status": "queued"}
     path = await _save_upload(file)
     try:
-        return analyze(path, file.filename, use_clip=use_clip)
+        return analyze(path, file.filename, use_clip=use_clip, camera=camera)
     finally:
         os.unlink(path)
 
@@ -245,6 +267,7 @@ LINE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,31}$")
 
 class LineIn(BaseModel):
     name: str
+    camera: str = "default"
     x1: float
     y1: float
     x2: float
@@ -253,7 +276,7 @@ class LineIn(BaseModel):
 
 def _line_rows(conn):
     return [dict(r) for r in conn.execute(
-        "SELECT name, x1, y1, x2, y2 FROM count_lines ORDER BY created").fetchall()]
+        "SELECT name, camera, x1, y1, x2, y2 FROM count_lines ORDER BY camera, created").fetchall()]
 
 
 @app.get("/lines/")
@@ -284,10 +307,11 @@ def save_line(line: LineIn):
         count = conn.execute("SELECT COUNT(*) FROM count_lines").fetchone()[0]
         if not exists and count >= MAX_LINES:
             raise HTTPException(409, f"At most {MAX_LINES} lines; delete one first.")
-        conn.execute("""INSERT INTO count_lines (name, x1, y1, x2, y2, created) VALUES (?,?,?,?,?,?)
+        camera = _valid_camera(line.camera)
+        conn.execute("""INSERT INTO count_lines (name, x1, y1, x2, y2, created, camera) VALUES (?,?,?,?,?,?,?)
                         ON CONFLICT(name) DO UPDATE SET x1=excluded.x1, y1=excluded.y1,
-                        x2=excluded.x2, y2=excluded.y2""",
-                     (name, *coords, datetime.datetime.now().isoformat()))
+                        x2=excluded.x2, y2=excluded.y2, camera=excluded.camera""",
+                     (name, *coords, datetime.datetime.now().isoformat(), camera))
         conn.commit()
         return {"lines": _line_rows(conn)}
     finally:
@@ -305,6 +329,51 @@ def delete_line(name: str):
         return {"lines": _line_rows(conn)}
     finally:
         conn.close()
+
+
+@app.get("/privacy/")
+def privacy_info():
+    return {
+        "retention_days": RETENTION_DAYS or None,
+        "stores": ["people counts per second", "per-person track statistics (no images)",
+                   "line-crossing events", "counting-line settings"],
+        "does_not_store": ["uploaded video (deleted when its job ends)", "face or person images",
+                           "stream URLs in responses"],
+    }
+
+
+@app.post("/privacy/purge")
+def privacy_purge(days: int):
+    if days < 0:
+        raise HTTPException(422, "days must be 0 or more.")
+    return {"deleted": privacy.purge_older_than(days)}
+
+
+@app.delete("/privacy/data")
+def privacy_wipe(confirm: str = ""):
+    if confirm != "yes":
+        raise HTTPException(400, "Add ?confirm=yes to delete all analytics data.")
+    return {"deleted": privacy.wipe_all()}
+
+
+@app.get("/streams/")
+def list_streams():
+    """Names of configured camera sources (STREAM_SOURCES). URLs are never returned."""
+    return {"streams": sorted(streams.configured()), "max_seconds": streams.MAX_SECONDS}
+
+
+@app.post("/analyze_stream/")
+def analyze_stream(name: str, seconds: int = 30, camera: str = "default"):
+    """Record `seconds` from a configured source, then analyse it as a background job."""
+    if name not in streams.configured():
+        raise HTTPException(404, "Unknown stream. Configure it in STREAM_SOURCES.")
+    if not 1 <= seconds <= streams.MAX_SECONDS:
+        raise HTTPException(422, f"seconds must be between 1 and {streams.MAX_SECONDS}.")
+    try:
+        job_id = jobs.submit("stream", {"name": name, "seconds": seconds, "camera": _valid_camera(camera)})
+    except jobs.QueueFull as e:
+        raise HTTPException(429, str(e))
+    return {"job_id": job_id, "status": "queued"}
 
 
 @app.get("/ask/")

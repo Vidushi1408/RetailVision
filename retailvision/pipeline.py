@@ -11,16 +11,17 @@ from .tracker import track_features, track_video
 DEFAULT_LINES = {"entrance": [0.0, 0.5, 1.0, 0.5]}
 
 
-def count_lines():
+def count_lines(camera="default"):
     """Counting lines as {"name": [ax, ay, bx, by]} in normalised frame coordinates (0-1).
 
-    Priority: lines saved from the dashboard (count_lines table), then the COUNT_LINES env var
+    Priority: lines saved from the dashboard for this camera, then the COUNT_LINES env var
     (JSON), then one horizontal line across the middle of the frame.
     """
     conn = connect()
     try:
         saved = {r["name"]: [r["x1"], r["y1"], r["x2"], r["y2"]]
-                 for r in conn.execute("SELECT * FROM count_lines ORDER BY created").fetchall()}
+                 for r in conn.execute("SELECT * FROM count_lines WHERE camera = ? ORDER BY created",
+                                       (camera,)).fetchall()}
     finally:
         conn.close()
     if saved:
@@ -29,16 +30,16 @@ def count_lines():
     return json.loads(raw) if raw else dict(DEFAULT_LINES)
 
 
-def analyze(path, filename, use_clip=True):
-    meta, tracks, crops = track_video(path, lines=count_lines())
+def analyze(path, filename, use_clip=True, camera="default"):
+    meta, tracks, crops = track_video(path, lines=count_lines(camera))
     ids = [i for i, t in tracks.items() if len(t["points"]) >= 3]  # drop flickers
     feats = [track_features(tracks[i]) for i in ids]
     segments = segment_shoppers(feats)
 
     conn = connect()
     now = datetime.datetime.now()
-    vid = conn.execute("INSERT INTO videos (filename, fps, duration_sec, created) VALUES (?,?,?,?)",
-                       (filename, meta["fps"], meta["duration_sec"], now.isoformat())).lastrowid
+    vid = conn.execute("INSERT INTO videos (filename, fps, duration_sec, created, camera) VALUES (?,?,?,?,?)",
+                       (filename, meta["fps"], meta["duration_sec"], now.isoformat(), camera)).lastrowid
     for i, f, seg in zip(ids, feats, segments):
         role, carry = classify_person(crops.get(i)) if use_clip and attributes_enabled() else ("unknown", "unknown")
         conn.execute("""INSERT INTO tracks (video_id, track_id, first_sec, last_sec, dwell_sec,
@@ -61,6 +62,7 @@ def analyze(path, filename, use_clip=True):
     avg_dwell = round(sum(f["dwell_sec"] for f in feats) / max(len(feats), 1), 1) if feats else 0.0
     summary = {
         "video_id": vid,
+        "camera": camera,
         "unique_people": len(ids),
         "people_count": len(ids),  # Backward compatibility
         "duration_sec": round(meta["duration_sec"], 1),

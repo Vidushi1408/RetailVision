@@ -177,7 +177,7 @@
         saved.forEach(l => {
             const li = document.createElement("li");
             const span = document.createElement("span");
-            span.textContent = l.name;
+            span.textContent = l.name + (l.camera && l.camera !== "default" ? "  (camera: " + l.camera + ")" : "");
             const del = document.createElement("button");
             del.type = "button"; del.className = "lines-btn"; del.textContent = "Delete";
             del.setAttribute("aria-label", "Delete line " + l.name);
@@ -190,11 +190,13 @@
             listEl.appendChild(li);
         });
         render();
+        window.dispatchEvent(new Event("lines-changed"));
     }
 
     document.getElementById("line-save").addEventListener("click", async () => {
         if (points.length !== 2) return say("Draw a line first: click two points on the frame.", true);
-        const body = { name: nameEl.value.trim(), x1: points[0].x, y1: points[0].y, x2: points[1].x, y2: points[1].y };
+        const camEl = document.getElementById("line-camera");
+        const body = { name: nameEl.value.trim(), camera: (camEl && camEl.value.trim()) || "default", x1: points[0].x, y1: points[0].y, x2: points[1].x, y2: points[1].y };
         const res = await fetch("/lines/", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
         if (res.ok) {
             say('Saved "' + body.name + '". It will be used for the next analysis.');

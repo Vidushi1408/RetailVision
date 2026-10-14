@@ -49,6 +49,16 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_tracks_video_id ON tracks(video_id);
         CREATE INDEX IF NOT EXISTS idx_tracks_segment ON tracks(segment);
     """)
+    _ensure_column(conn, "count_lines", "camera", "TEXT DEFAULT 'default'")
+    _ensure_column(conn, "videos", "camera", "TEXT DEFAULT 'default'")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lines_camera ON count_lines(camera)")
     conn.commit()
     conn.close()
+
+
+def _ensure_column(conn, table, column, decl):
+    """Tiny forward-only migration: add a column to a table created by an older version."""
+    cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
